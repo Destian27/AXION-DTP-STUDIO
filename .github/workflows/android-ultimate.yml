@@ -8,13 +8,18 @@ on:
     branches: [main, master, develop]
   workflow_dispatch:
     inputs:
+      drive_url:
+        description: 'Link Google Drive (file ZIP/arsip atau folder) berisi project Android. Diunduh dan diekstrak otomatis. Prioritas tertinggi (opsional)'
+        required: false
+        default: ''
+        type: string
       project_dir:
-        description: 'Folder project Android di repository (digunakan bila project_zip kosong)'
+        description: 'Folder project Android di repository (digunakan bila drive_url dan project_zip kosong)'
         required: false
         default: '.'
         type: string
       project_zip:
-        description: 'Path ZIP source Android di repository, contoh input/project.zip (opsional)'
+        description: 'Path ZIP source Android di repository, contoh input/project.zip (opsional; dipakai bila drive_url kosong)'
         required: false
         default: ''
         type: string
@@ -77,6 +82,7 @@ jobs:
       build_tools_version: ${{ steps.config.outputs.build_tools_version }}
     env:
       BUILD_MODE: ${{ inputs.build_mode || 'all' }}
+      DRIVE_URL: ${{ inputs.drive_url || '' }}
       PROJECT_DIR: ${{ inputs.project_dir || '.' }}
       PROJECT_ZIP: ${{ inputs.project_zip || '' }}
       JAVA_OVERRIDE: ${{ inputs.java_version || 'auto' }}
@@ -96,13 +102,29 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Prepare project source (folder or ZIP)
+      - name: Download source from Google Drive
+        id: drive
+        if: ${{ env.DRIVE_URL != '' }}
+        run: |
+          python -m pip install --quiet --upgrade gdown
+          if ! command -v 7z >/dev/null 2>&1 && ! command -v 7zz >/dev/null 2>&1; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq 7zip \
+              || echo 'Peringatan: 7-Zip tidak terpasang; hanya ZIP/TAR yang dapat diekstrak.'
+          fi
+          python scripts/fetch_drive.py \
+            --url "$DRIVE_URL" \
+            --out "$RUNNER_TEMP/drive-download"
+
+      - name: Prepare project source (Drive, ZIP or folder)
         id: prepare
+        env:
+          DRIVE_DIR: ${{ steps.drive.outputs.download_dir || '' }}
         run: |
           python scripts/prepare_project.py \
             --workspace "$GITHUB_WORKSPACE" \
             --project-dir "$PROJECT_DIR" \
-            --project-zip "$PROJECT_ZIP"
+            --project-zip "$PROJECT_ZIP" \
+            --source-dir "$DRIVE_DIR"
 
       - name: Detect Android toolchain requirements
         id: detect

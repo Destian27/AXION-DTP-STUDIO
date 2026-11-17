@@ -5,7 +5,8 @@ Paket ini menyatukan alur build Android berbasis Gradle, setup Android SDK, cach
 ## Isi paket
 
 - `.github/workflows/android-ultimate.yml` — workflow utama.
-- `scripts/prepare_project.py` — memakai project folder atau mengekstrak ZIP source secara aman.
+- `scripts/fetch_drive.py` — mengunduh file atau folder Google Drive memakai `gdown`.
+- `scripts/prepare_project.py` — memakai project folder, atau mengekstrak arsip (ZIP, TAR, TAR.GZ, 7Z, RAR) secara aman, termasuk arsip di dalam arsip.
 - `scripts/detect_toolchain.py` — mendeteksi AGP, Gradle Wrapper, compileSdk, JDK, NDK, dan CMake.
 - `scripts/collect_build_outputs.py` — mengumpulkan APK/AAB dari semua module.
 - `scripts/diagnose_failure.py` — memberi petunjuk dari log Gradle.
@@ -22,6 +23,18 @@ Paket ini menyatukan alur build Android berbasis Gradle, setup Android SDK, cach
 6. Untuk source project di root, biarkan `project_dir` = `.` dan `project_zip` kosong. Untuk source ZIP yang sudah di-commit, taruh di `input/` lalu isi `project_zip`, misalnya `input/aplikasi-android.zip`.
 
 Workflow ini ditujukan untuk aplikasi Android native berbasis Gradle (Java/Kotlin, XML Views, dan NDK/CMake opsional). Workflow tidak memodifikasi source project secara otomatis.
+
+## Sumber project lewat link Google Drive
+
+Pada **Run workflow**, isi kolom `drive_url` dengan link Google Drive. Workflow akan mengunduh dengan `gdown`, mengekstrak arsip secara otomatis, lalu mencari project Gradle Android.
+
+- Link yang didukung: folder (`https://drive.google.com/drive/folders/...`) atau satu file (`https://drive.google.com/file/d/.../view`).
+- Link harus dibagikan sebagai **Siapa saja yang memiliki link** (Anyone with the link).
+- File yang didukung: `.zip`, `.tar`, `.tar.gz`/`.tgz`, `.tar.bz2`, `.tar.xz`, `.7z`, `.rar`. Arsip di dalam arsip juga diekstrak sampai project ditemukan. Arsip berpassword tidak didukung.
+- Jika project sudah berupa file lepas (ada `settings.gradle` atau `gradlew`), arsip lain di dalamnya (misalnya `assets.zip`) **tidak** diekstrak.
+- Folder Drive dibatasi gdown sekitar 50 file. Untuk project besar, kompres menjadi satu ZIP lalu bagikan link file ZIP itu.
+- Urutan prioritas sumber: `drive_url` > `project_zip` > `project_dir`.
+- Hanya link Google Drive (`drive.google.com`) yang diterima. Link dari situs lain ditolak.
 
 ## Mode build
 
@@ -103,11 +116,12 @@ Daftar ABI contoh: `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`. Universal APK ha
 1. Ini adalah workflow universal untuk **project Gradle Android**, bukan jaminan semua source Android dapat dibangun. Error pada source code, plugin, versi AGP/Gradle, dependency privat, atau konfigurasi aplikasi tetap harus diperbaiki pada project tersebut.
 2. Build APK Universal/Multi-ABI membutuhkan konfigurasi Gradle aplikasi, dan library native yang sesuai untuk masing-masing ABI.
 3. Proyek Flutter, React Native, Cordova, atau proyek yang tidak memakai Gradle native Android tidak termasuk target utama paket ini.
-4. Source ZIP harus berada di repository (contoh `input/project.zip`) sebelum workflow dijalankan; halaman Run workflow GitHub tidak menerima unggahan file ZIP langsung.
+4. Halaman Run workflow GitHub tidak menerima unggahan file langsung. Gunakan `drive_url` (link Google Drive), atau commit ZIP ke repository (contoh `input/project.zip`) lalu isi `project_zip`.
 5. Pada workflow manual, `project_zip` harus path relatif dari root repository.
 6. `publish_release` membutuhkan keempat Secrets signing. Push tag `v*` juga akan menjalankan signing/release.
 7. Action pihak ketiga dipanggil dari repository resminya pada versi yang dicantumkan di workflow. Untuk keamanan tertinggi di organisasi, pin semua Action eksternal ke commit SHA setelah melakukan audit dan update berkala.
-8. Build output dari source ZIP tidak dipercaya otomatis. Job build tidak diberi keystore/password atau permission tulis Release. Hanya job publish yang memegang signing secrets.
+8. Source dari Google Drive diperlakukan sama seperti source ZIP: tidak dipercaya. Build dijalankan tanpa signing secrets.
+9. Build output dari source ZIP tidak dipercaya otomatis. Job build tidak diberi keystore/password atau permission tulis Release. Hanya job publish yang memegang signing secrets.
 
 ## Action yang digunakan
 
