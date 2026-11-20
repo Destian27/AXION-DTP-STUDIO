@@ -32,6 +32,11 @@ name: Build Nova Engine APK v3
 #   ANDROID_KEY_ALIAS supaya tanda tangan SAMA tiap build (bisa update tanpa
 #   uninstall). Kalau kosong -> keystore sementara dibuat otomatis.
 #
+# Perbaikan (run #2 gagal): step "Install Android SDK / NDK" sekarang mencari
+# sdkmanager sendiri dan mengunduh command-line tools bila tidak ada di runner.
+# Versi action dinaikkan (checkout v6, setup-java v5, setup-python v6,
+# upload-artifact v6) supaya peringatan Node.js 20 / setup-java v4 hilang.
+#
 # Catatan: workflow ini hanya jalan manual (tidak otomatis tiap push), supaya
 # repo kecil yang hanya berisi file ini tidak memicu build yang pasti gagal.
 # ============================================================================
@@ -86,16 +91,16 @@ jobs:
           df -h /
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Java 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -325,11 +330,95 @@ jobs:
               out.write(f"APP_VERSION={app_version}\n")
           PY
 
+      # ---------------------------------------------------------------
+      # Pasang Android SDK / NDK.
+      # Image runner bisa saja TIDAK menaruh sdkmanager di PATH (itu
+      # penyebab error "sdkmanager: command not found"). Jadi:
+      #   1) cari sdkmanager di lokasi umum,
+      #   2) kalau tidak ada, unduh Android command-line tools resmi
+      #      dari Google dan pasang di $ANDROID_HOME/cmdline-tools/latest
+      #      (lokasi yang juga dicari SCons Godot).
+      # ---------------------------------------------------------------
       - name: Install Android SDK / NDK
         run: |
-          export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          echo "ANDROID_HOME=$ANDROID_HOME"
-          yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses > /dev/null || true
+          set -euo pipefail
+
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          echo "SDK root: $SDK"
+          sudo mkdir -p "$SDK"
+
+          # Pastikan folder SDK bisa ditulis user runner (sdkmanager menulis ke sini).
+          need_chown=0
+          for d in "$SDK" "$SDK/licenses" "$SDK/platforms" "$SDK/build-tools" \
+                   "$SDK/ndk" "$SDK/cmdline-tools" "$SDK/platform-tools"; do
+            if [ -e "$d" ] && [ ! -w "$d" ]; then need_chown=1; fi
+          done
+          if [ "$need_chown" = "1" ]; then
+            echo "Memperbaiki izin tulis folder SDK"
+            sudo chown -R "$(id -u):$(id -g)" "$SDK"
+          fi
+
+          find_sdkmanager() {
+            local c
+            if [ -x "$SDK/cmdline-tools/latest/bin/sdkmanager" ]; then
+              echo "$SDK/cmdline-tools/latest/bin/sdkmanager"; return 0
+            fi
+            for c in "$SDK"/cmdline-tools/*/bin/sdkmanager; do
+              if [ -x "$c" ]; then echo "$c"; return 0; fi
+            done
+            if command -v sdkmanager >/dev/null 2>&1; then
+              command -v sdkmanager; return 0
+            fi
+            return 1
+          }
+
+          install_cmdline_tools() {
+            local tmp="$RUNNER_TEMP/cmdline-tools-dl" url f
+            for url in \
+              https://dl.google.com/android/repository/commandlinetools-linux-14742923_latest.zip \
+              https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip \
+              https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip; do
+              rm -rf "$tmp"; mkdir -p "$tmp/x"
+              f="$tmp/cmdline-tools.zip"
+              echo "Unduh: $url"
+              if curl -fL --retry 3 --retry-delay 5 --connect-timeout 30 -o "$f" "$url" \
+                 && unzip -tq "$f" >/dev/null 2>&1; then
+                unzip -q "$f" -d "$tmp/x"
+                mkdir -p "$SDK/cmdline-tools"
+                rm -rf "$SDK/cmdline-tools/latest"
+                mv "$tmp/x/cmdline-tools" "$SDK/cmdline-tools/latest"
+                rm -rf "$tmp"
+                return 0
+              fi
+            done
+            return 1
+          }
+
+          SDKM="$(find_sdkmanager || true)"
+          if [ -z "$SDKM" ]; then
+            echo "sdkmanager tidak ada di image runner -> mengunduh command-line tools dari Google"
+            install_cmdline_tools || { echo "::error::Gagal mengunduh Android command-line tools dari dl.google.com."; exit 1; }
+            SDKM="$SDK/cmdline-tools/latest/bin/sdkmanager"
+          fi
+          chmod +x "$SDKM" || true
+          if [ ! -x "$SDKM" ]; then
+            echo "::error::sdkmanager tidak bisa dijalankan: $SDKM"
+            exit 1
+          fi
+          echo "sdkmanager: $SDKM"
+
+          # SCons Godot mencari $SDK/cmdline-tools/latest/bin/sdkmanager; buat symlink bila perlu.
+          case "$SDKM" in
+            "$SDK"/cmdline-tools/*/bin/sdkmanager)
+              ver_dir="${SDKM#"$SDK"/cmdline-tools/}"
+              ver_dir="${ver_dir%%/*}"
+              if [ "$ver_dir" != "latest" ] && [ ! -e "$SDK/cmdline-tools/latest" ]; then
+                ln -s "$ver_dir" "$SDK/cmdline-tools/latest"
+              fi ;;
+          esac
+
+          java -version 2>&1 | head -n 1 || true
+          { yes || true; } 2>/dev/null | "$SDKM" --sdk_root="$SDK" --licenses > /dev/null || true
 
           pkgs=("platform-tools" "platforms;${NOVA_PLATFORM}" "build-tools;${NOVA_BUILD_TOOLS}")
           for v in $NOVA_NDK_LIST; do
@@ -339,7 +428,7 @@ jobs:
           ok=0
           for percobaan in 1 2 3; do
             echo "=== sdkmanager, percobaan $percobaan ==="
-            if sdkmanager --sdk_root="$ANDROID_HOME" "${pkgs[@]}"; then
+            if { yes || true; } 2>/dev/null | "$SDKM" --sdk_root="$SDK" "${pkgs[@]}"; then
               ok=1
               break
             fi
@@ -350,20 +439,25 @@ jobs:
             exit 1
           fi
 
-          dirs=("platforms/${NOVA_PLATFORM}" "build-tools/${NOVA_BUILD_TOOLS}")
+          dirs=("platform-tools" "platforms/${NOVA_PLATFORM}" "build-tools/${NOVA_BUILD_TOOLS}")
           for v in $NOVA_NDK_LIST; do
             dirs+=("ndk/$v")
           done
           for d in "${dirs[@]}"; do
-            if [ ! -d "$ANDROID_HOME/$d" ]; then
+            if [ ! -d "$SDK/$d" ]; then
               echo "::error::Komponen SDK '$d' gagal terpasang."
               exit 1
             fi
           done
 
-          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk/${NOVA_NDK}" >> "$GITHUB_ENV"
+          {
+            echo "ANDROID_HOME=$SDK"
+            echo "ANDROID_SDK_ROOT=$SDK"
+            echo "ANDROID_NDK_ROOT=$SDK/ndk/${NOVA_NDK}"
+            echo "ANDROID_NDK_HOME=$SDK/ndk/${NOVA_NDK}"
+          } >> "$GITHUB_ENV"
+          dirname "$SDKM" >> "$GITHUB_PATH"
+          echo "$SDK/platform-tools" >> "$GITHUB_PATH"
 
       - name: Siapkan keystore
         env:
@@ -486,7 +580,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK (artifact)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: DTP-Nova-Engine-${{ env.APP_VERSION }}-apk
           path: hasil/DTP-Nova-Engine-*.apk
@@ -528,7 +622,7 @@ jobs:
 
       - name: Upload log kegagalan
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: nova-engine-log-gagal
           path: logs/
@@ -539,7 +633,7 @@ jobs:
       # APK-nya tetap diselamatkan supaya build berjam-jam tidak sia-sia.
       - name: Selamatkan APK yang belum terverifikasi
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: nova-engine-apk-belum-terverifikasi
           path: hasil/*.apk
