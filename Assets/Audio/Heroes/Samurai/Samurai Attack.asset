@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c00fb1f7dc392b247969fe251c9b0f1b, type: 3}
+  m_Name: Samurai Attack
+  m_EditorClassIdentifier: 
+  audioClips:
+  - {fileID: 8300000, guid: 0cd17f7dd6e8dfc4fb51100ebc9490fe, type: 3}
+  - {fileID: 8300000, guid: 6461dbd7010bf574d93a7987dadb42cc, type: 3}
+  - {fileID: 8300000, guid: 82434d7cb42c23749a2ae08e139b04a0, type: 3}
+  - {fileID: 8300000, guid: 38dad8b4d38caa64886ceaf056baf649, type: 3}
+  - {fileID: 8300000, guid: 6d7b1d37244dbd941b1e52f1cfbd2674, type: 3}
