@@ -7,6 +7,9 @@ public static class DTPSigning
 {
     static DTPSigning()
     {
+#if UNITY_2019_1_OR_NEWER
+        PlayerSettings.Android.useCustomKeystore = true;
+#endif
         PlayerSettings.Android.keystoreName = "Keystore/dtp.keystore";
         PlayerSettings.Android.keystorePass = "dtp123456";
         PlayerSettings.Android.keyaliasName = "dtpkey";
