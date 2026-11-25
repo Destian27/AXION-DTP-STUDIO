@@ -1,0 +1,66 @@
+name: Build Android
+
+on:
+  workflow_dispatch:      # jalankan manual dari tab Actions
+  push:
+    tags:
+      - "v*"              # atau otomatis saat push tag, mis. v0.1.0
+
+concurrency:
+  group: build-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build APK (Android)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      # Image Unity + Android SDK/NDK besar; bebaskan disk runner dulu.
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: false
+          swap-storage: true
+
+      - uses: actions/checkout@v4
+
+      # Cache Library biar build berikutnya jauh lebih cepat.
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-Android-${{ hashFiles('Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt') }}
+          restore-keys: |
+            Library-Android-
+
+      - name: Unity build (Android)
+        uses: game-ci/unity-builder@v6
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          ANDROID_KEYSTORE_PATH: Keystore/dtp.keystore
+        with:
+          targetPlatform: Android
+          unityVersion: auto            # dibaca dari ProjectSettings/ProjectVersion.txt (6000.0.47f1)
+          buildMethod: CIBuild.BuildAndroid
+          buildName: SamuraiVsZombieDTP
+          buildsPath: build
+          versioning: None
+          androidVersionCode: ${{ github.run_number }}
+          androidTargetSdkVersion: 35
+          androidExportType: androidPackage
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SamuraiVsZombieDTP-android-${{ github.run_number }}
+          path: build/**/*.apk
+          if-no-files-found: error
+          retention-days: 14

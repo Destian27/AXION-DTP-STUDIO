@@ -1,0 +1,59 @@
+using UnityEngine;
+
+[CreateAssetMenu(fileName = "NewHero", menuName = "Game Data/Hero")]
+public class HeroData : ScriptableObject, IUpgradable {
+    public string id;
+    public string displayName;
+    public string description;
+    public Sprite icon;
+    public CostumeData[] costumes;
+    public MeleeWeaponData meleeWeaponData;
+    public RangedWeaponData rangedWeaponData;
+    public AnimationEventData animationEvents;
+
+    public CostumeData GetEquippedCostume() {
+        CostumeData costume = costumes[SaveManager.equippedCostumes[SaveManager.selectedHero]];
+        if (costume.material)
+            costume.prefab.GetComponent<SkinnedMeshRenderer>().material = costume.material;
+        return costume;
+    }
+
+    public enum Stat {
+        MaxHealth,
+        HealthRegen,
+        HealthRegenDelay,
+        Speed
+    }
+    public GenericDictionary<Stat, float> stats;
+    public GenericDictionary<Stat, float>[] upgrades;
+
+    public float maxHealth {
+        get {
+            return GetStat(Stat.MaxHealth);
+        }
+    }
+    public float healthRegen {
+        get {
+            return GetStat(Stat.HealthRegen);
+        }
+    }
+    public float healthRegenDelay {
+        get {
+            return GetStat(Stat.HealthRegenDelay);
+        }
+    }
+    public float speed {
+        get {
+            return GetStat(Stat.Speed);
+        }
+    }
+
+    public float GetStat(Stat stat) {
+        return GetStat(SaveManager.levels[this], stat);
+    }
+    public float GetStat(int level, Stat stat) {
+        if (upgrades[level - 1].ContainsKey(stat))
+            return upgrades[level - 1][stat];
+        return stats[stat];
+    }
+}
