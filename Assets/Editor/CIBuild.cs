@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Build;
 using UnityEditor.AddressableAssets.Build.DataBuilders;
 using UnityEditor.AddressableAssets.Settings;
@@ -16,7 +17,7 @@ using UnityEngine;
 public static class CIBuild
 {
     private const string DefaultOutputDir = "build/Android";
-    private const string DefaultName = "ShinSVZ";
+    private const string DefaultName = "SamuraiVsZombieDTP";
 
     public static void BuildAndroid()
     {

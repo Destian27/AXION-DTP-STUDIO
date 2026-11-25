@@ -6,8 +6,8 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/GluLogoIntro.unity
-    guid: 680a744af1267af4f8695e9fd323817f
+    path: Assets/Scenes/TitleScreen.unity
+    guid: afb5a082957e87246b6c0cb1664820aa
   m_configObjects:
     com.unity.addressableassets: {fileID: 11400000, guid: 3b7972bfab06c1c478a0bee6a02cc68c, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
