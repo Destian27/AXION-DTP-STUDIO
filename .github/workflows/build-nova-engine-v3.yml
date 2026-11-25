@@ -46,6 +46,13 @@ name: Build Nova Engine APK v3
 # Nova-engine.zip (SDK 36 / build-tools 36.1.0 / NDK 29.0.14206865 / Java 17 /
 # Gradle task generateGodotEditor / APK android_editor-android-release).
 #
+# Perbaikan (run #7 gagal): SCons dijalankan tanpa store_release=yes, sehingga
+# libgodot_android.so ditaruh di lib/libs/tools/DEBUG dan Gradle
+# generateGodotEditor hanya membuat android_editor-android-debug.apk/.aab. Langkah
+# verifikasi mencari APK *release* -> "APK release tidak ditemukan".
+# Sekarang perintah scons memakai store_release=yes (lihat platform/android/SCsub)
+# dan ada pengecekan .so release segera setelah kompilasi (gagal cepat + jelas).
+#
 # FITUR BARU — LAPORAN ERROR LENGKAP (.txt), otomatis saat build GAGAL:
 #   Isi laporan:
 #     - langkah mana yang gagal, di tahap berapa dari 9, durasi tiap langkah
@@ -569,7 +576,11 @@ jobs:
           ok=0
           for percobaan in 1 2 3; do
             echo "=== Kompilasi, percobaan $percobaan ==="
+            # store_release=yes WAJIB: tanpa ini, target=editor menaruh .so di
+            # lib/libs/tools/debug dan Gradle hanya membuat APK *debug*
+            # (android_editor-android-debug.apk), bukan release.
             if scons platform=android target=editor arch=arm64 production=yes \
+                 store_release=yes \
                  lto=none module_text_server_fb_enabled=yes accesskit=no \
                  swappy=no -j"$(nproc)" 2>&1 | tee -a "$GITHUB_WORKSPACE/logs/scons-full.log"; then
               ok=1
@@ -583,6 +594,15 @@ jobs:
           fi
           ls -l bin/ || true
           df -h /
+
+          # Pastikan .so masuk folder RELEASE (yang dicari task Gradle generateGodotEditor).
+          LIBS="platform/android/java/lib/libs/tools"
+          if [ ! -s "$LIBS/release/arm64-v8a/libgodot_android.so" ]; then
+            echo "::error::libgodot_android.so tidak ada di $LIBS/release/arm64-v8a (store_release=yes tidak berlaku?)."
+            ls -lR "$LIBS" || true
+            exit 1
+          fi
+          ls -lh "$LIBS/release/arm64-v8a"
 
       - name: Generate APK (Gradle)
         id: gradle
