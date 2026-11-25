@@ -143,17 +143,23 @@ public class HUDAbilities
 	{
 		if (mCooldown[index].current != mCooldown[index].max || !(WeakGlobalSceneBehavior<InGameImpl>.instance.hero.health > 0f))
 		{
-			return false;
+			goto IL_0070;
 		}
 		if (shouldQueueAbility())
 		{
 			int? num = mQueuedAbility;
 			if (num.HasValue)
 			{
-				return false;
+				goto IL_0070;
 			}
 		}
-		return !WeakGlobalSceneBehavior<InGameImpl>.instance.gameOver;
+		int result = ((!WeakGlobalSceneBehavior<InGameImpl>.instance.gameOver) ? 1 : 0);
+		goto IL_0071;
+		IL_0071:
+		return (byte)result != 0;
+		IL_0070:
+		result = 0;
+		goto IL_0071;
 	}
 
 	private bool isAvailWithoutQueue(int index)

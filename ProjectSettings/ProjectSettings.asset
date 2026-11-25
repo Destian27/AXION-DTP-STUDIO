@@ -12,7 +12,7 @@ PlayerSettings:
   useOnDemandResources: 0
   accelerometerFrequency: 60
   companyName: DTP
-  productName: Samurai vs Zombie DTP
+  productName: Samurai Vs Zombies DTP 1
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
@@ -159,17 +159,17 @@ PlayerSettings:
   androidSupportedAspectRatio: 1
   androidMaxAspectRatio: 2.1
   applicationIdentifier:
-    Android: com.dtp.samuraivszombie2
-    Standalone: unity.Glu Games Inc..SvZ
+    Android: com.dtp.samuraivszombiesdtp1
+    Standalone: unity.DTP.SamuraiVsZombiesDTP1
     Tizen: 
     iOS: 
     tvOS: 
   buildNumber:
     iOS: 
   AndroidBundleVersionCode: 1
-  AndroidMinSdkVersion: 22
-  AndroidTargetSdkVersion: 29
-  AndroidPreferredInstallLocation: 1
+  AndroidMinSdkVersion: 24
+  AndroidTargetSdkVersion: 0
+  AndroidPreferredInstallLocation: 2
   aotOptions: 
   stripEngineCode: 1
   iPhoneStrippingLevel: 0
@@ -246,7 +246,7 @@ PlayerSettings:
   tvOSManualSigningProvisioningProfileID: 
   appleEnableAutomaticSigning: 0
   clonedFromGUID: 00000000000000000000000000000000
-  AndroidTargetArchitectures: 3
+  AndroidTargetArchitectures: 5
   AndroidSplashScreenScale: 0
   androidSplashScreen: {fileID: 0}
   AndroidKeystoreName: Keystore/dtp.keystore
@@ -571,8 +571,7 @@ PlayerSettings:
   webGLCompressionFormat: 1
   scriptingDefineSymbols: {}
   platformArchitecture: {}
-  scriptingBackend:
-    Android: 1
+  scriptingBackend: {}
   incrementalIl2cppBuild: {}
   additionalIl2CppArgs: 
   scriptingRuntimeVersion: 0
