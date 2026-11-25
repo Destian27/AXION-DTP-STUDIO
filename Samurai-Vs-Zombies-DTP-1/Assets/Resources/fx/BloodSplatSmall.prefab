@@ -1,0 +1,326 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &100100000
+Prefab:
+  serializedVersion: 2
+  m_ObjectHideFlags: 1
+  m_Modification:
+    m_TransformParent: {fileID: 0}
+    m_Modifications: []
+    m_RemovedComponents: []
+  m_ParentPrefab: {fileID: 0}
+  m_RootGameObject: {fileID: 1016238473884593}
+  m_IsPrefabParent: 1
+  m_IsExploded: 0
+--- !u!1 &1016238473884593
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4154111723936233}
+  - 114: {fileID: 114752088420137071}
+  - 114: {fileID: 114282647932249016}
+  - 114: {fileID: 114093555733683137}
+  m_Layer: 0
+  m_Name: BloodSplatSmall
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4154111723936233
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1016238473884593}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -9.999451, y: 57.94519, z: 295.63275}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children:
+  - {fileID: 4180201155447325}
+  - {fileID: 4387910738501694}
+  - {fileID: 4062098604234686}
+  m_Father: {fileID: 0}
+--- !u!114 &114752088420137071
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1016238473884593}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbee05443b9b67f14985305ef056de27, type: 3}
+  m_Name:
+  sourcePrefabPath: Assets/Resources/FX/BloodSplatSmall.prefab
+  basePrefabPath:
+  exemptObjects: []
+--- !u!114 &114282647932249016
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1016238473884593}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1425cfafe549424a6c5c0c3f2b407eaf, type: 3}
+  m_Name:
+  deleteWhenAllChildrenDead: 1
+  autoDeleteAfterTime: 0
+  letParticlesFinishForTimedDelete: 0
+--- !u!114 &114093555733683137
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1016238473884593}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name:
+--- !u!1 &1790677941056195
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4180201155447325}
+  - 114: {fileID: 15855763681565250}
+  m_Layer: 0
+  m_Name: BloodSplatSmallBack
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 4294967295
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4180201155447325
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1790677941056195}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children: []
+  m_Father: {fileID: 4154111723936233}
+--- !u!114 &15855763681565250
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1790677941056195}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7a1d5e3b9f24608a1b3c5d7e9f0a2b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  emitOnStart: 1
+  m_minSize: 120
+  m_maxSize: 200
+  minEnergy: 0.2
+  maxEnergy: 0.5
+  minEmission: 1
+  maxEmission: 2
+  worldVelocity: {x: 1, y: 1, z: 1}
+  localVelocity: {x: 1, y: 0, z: 0}
+  rndVelocity: {x: 0, y: 0, z: 0}
+  emitterVelocityScale: 0
+  tangentVelocity: {x: 0, y: 0, z: 0}
+  angularVelocity: 0
+  rndAngularVelocity: 3
+  rndRotation: 1
+  useWorldSpace: 0
+  oneShot: 1
+  ellipsoid: {x: 1, y: 1, z: 1}
+  minEmitterRange: 0
+  doesAnimateColor: 1
+  color0: {r: 1, g: 1, b: 1, a: 0.03922}
+  color1: {r: 1, g: 1, b: 1, a: 0.70588}
+  color2: {r: 1, g: 1, b: 1, a: 1}
+  color3: {r: 1, g: 1, b: 1, a: 0.70588}
+  color4: {r: 1, g: 1, b: 1, a: 0.03922}
+  worldRotationAxis: {x: 1, y: 1, z: 1}
+  localRotationAxis: {x: 1, y: 1, z: 1}
+  sizeGrow: 3.5
+  rndForce: {x: 5, y: 5, z: 5}
+  force: {x: 0, y: 0, z: 0}
+  damping: 1
+  autodestruct: 1
+  rendererEnabled: 1
+  rendererMaterial: {fileID: 2100000, guid: 3dcc4434de3ed5248a9bbb34b772c084, type: 2}
+  stretchMode: 0
+  lengthScale: 2
+  velocityScale: 1
+  cameraVelocityScale: 0
+  maxParticleSize: 0.5
+  uvTilesX: 1
+  uvTilesY: 1
+  uvCycles: 1
+--- !u!1 &1936575730513868
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4387910738501694}
+  - 114: {fileID: 15923951444617573}
+  m_Layer: 0
+  m_Name: BloodSplatSmallBlob
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 4294967295
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4387910738501694
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1936575730513868}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children: []
+  m_Father: {fileID: 4154111723936233}
+--- !u!114 &15923951444617573
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1936575730513868}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7a1d5e3b9f24608a1b3c5d7e9f0a2b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  emitOnStart: 1
+  m_minSize: 12
+  m_maxSize: 18
+  minEnergy: 0.5
+  maxEnergy: 1.5
+  minEmission: 2
+  maxEmission: 12
+  worldVelocity: {x: 4, y: 3, z: 2}
+  localVelocity: {x: 0, y: 200, z: 0}
+  rndVelocity: {x: 100, y: 50, z: 100}
+  emitterVelocityScale: 0
+  tangentVelocity: {x: 3, y: 3, z: 4}
+  angularVelocity: 0
+  rndAngularVelocity: 90
+  rndRotation: 0
+  useWorldSpace: 0
+  oneShot: 1
+  ellipsoid: {x: 5, y: 5, z: 5}
+  minEmitterRange: 0
+  doesAnimateColor: 1
+  color0: {r: 1, g: 1, b: 1, a: 0.03922}
+  color1: {r: 1, g: 1, b: 1, a: 0.70588}
+  color2: {r: 1, g: 1, b: 1, a: 1}
+  color3: {r: 1, g: 1, b: 1, a: 0.70588}
+  color4: {r: 1, g: 1, b: 1, a: 0.03922}
+  worldRotationAxis: {x: 0, y: 0, z: 0}
+  localRotationAxis: {x: 0, y: 0, z: 0}
+  sizeGrow: 0
+  rndForce: {x: 0, y: 0, z: 0}
+  force: {x: 1, y: -200, z: 1}
+  damping: 1
+  autodestruct: 1
+  rendererEnabled: 1
+  rendererMaterial: {fileID: 2100000, guid: 03c2c635f3172294c8ffc6b8ce58ebcd, type: 2}
+  stretchMode: 0
+  lengthScale: 2
+  velocityScale: 0
+  cameraVelocityScale: 0
+  maxParticleSize: 0.25
+  uvTilesX: 1
+  uvTilesY: 1
+  uvCycles: 1
+--- !u!1 &1949702619249320
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4062098604234686}
+  - 114: {fileID: 15664336914625204}
+  m_Layer: 0
+  m_Name: BloodSplatSmallMain
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 4294967295
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4062098604234686
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1949702619249320}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children: []
+  m_Father: {fileID: 4154111723936233}
+--- !u!114 &15664336914625204
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1949702619249320}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7a1d5e3b9f24608a1b3c5d7e9f0a2b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  emitOnStart: 1
+  m_minSize: 200
+  m_maxSize: 250
+  minEnergy: 0.4
+  maxEnergy: 0.8
+  minEmission: 1
+  maxEmission: 1
+  worldVelocity: {x: 1, y: 1, z: 1}
+  localVelocity: {x: 1, y: 0, z: 0}
+  rndVelocity: {x: 0, y: 0, z: 0}
+  emitterVelocityScale: 0
+  tangentVelocity: {x: 0, y: 0, z: 0}
+  angularVelocity: 0
+  rndAngularVelocity: 0
+  rndRotation: 0
+  useWorldSpace: 0
+  oneShot: 1
+  ellipsoid: {x: 1, y: 1, z: 1}
+  minEmitterRange: 0
+  doesAnimateColor: 1
+  color0: {r: 1, g: 1, b: 1, a: 0.03922}
+  color1: {r: 1, g: 1, b: 1, a: 0.70588}
+  color2: {r: 1, g: 1, b: 1, a: 1}
+  color3: {r: 1, g: 1, b: 1, a: 0.70588}
+  color4: {r: 1, g: 1, b: 1, a: 0.03922}
+  worldRotationAxis: {x: 1, y: 1, z: 1}
+  localRotationAxis: {x: 1, y: 1, z: 1}
+  sizeGrow: 7
+  rndForce: {x: 5, y: 5, z: 5}
+  force: {x: 0, y: 0, z: 0}
+  damping: 1
+  autodestruct: 1
+  rendererEnabled: 1
+  rendererMaterial: {fileID: 2100000, guid: 79cc8c1b66d2d2041be949ef1af4a82c, type: 2}
+  stretchMode: 0
+  lengthScale: 2
+  velocityScale: 1
+  cameraVelocityScale: 0
+  maxParticleSize: 0.25
+  uvTilesX: 4
+  uvTilesY: 4
+  uvCycles: 1

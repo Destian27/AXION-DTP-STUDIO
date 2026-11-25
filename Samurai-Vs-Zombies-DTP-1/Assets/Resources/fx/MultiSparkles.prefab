@@ -1,0 +1,220 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &100100000
+Prefab:
+  serializedVersion: 2
+  m_ObjectHideFlags: 1
+  m_Modification:
+    m_TransformParent: {fileID: 0}
+    m_Modifications: []
+    m_RemovedComponents: []
+  m_ParentPrefab: {fileID: 0}
+  m_RootGameObject: {fileID: 1029416768856184}
+  m_IsPrefabParent: 1
+  m_IsExploded: 0
+--- !u!1 &1029416768856184
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4993166597119702}
+  - 114: {fileID: 114905841319793458}
+  - 82: {fileID: 82761597222121484}
+  - 114: {fileID: 114166984796280267}
+  m_Layer: 0
+  m_Name: MultiSparkles
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4993166597119702
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1029416768856184}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0.8218038, y: 9.6932745, z: 1.3272555}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children:
+  - {fileID: 4556684841477575}
+  m_Father: {fileID: 0}
+--- !u!114 &114905841319793458
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1029416768856184}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbee05443b9b67f14985305ef056de27, type: 3}
+  m_Name:
+  sourcePrefabPath: Assets/Resources/FX/MultiSparkles.prefab
+  basePrefabPath:
+  exemptObjects: []
+--- !u!82 &82761597222121484
+AudioSource:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1029416768856184}
+  m_Enabled: 0
+  m_audioClip: {fileID: 8300000, guid: 415dd0574c8e4474fa6e3beb226fcaf6, type: 3}
+  m_PlayOnAwake: 1
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 1
+  Mute: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 150
+  MaxDistance: 900
+  Pan2D: 0
+  rolloffMode: 2
+  BypassEffects: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - time: 150
+      value: 1
+      inSlope: -0.004890845
+      outSlope: -0.004890845
+      tangentMode: 0
+    - time: 354.54407
+      value: 0.5
+      inSlope: -0.0012227113
+      outSlope: -0.0012227113
+      tangentMode: 0
+    - time: 724.5163
+      value: 0.21903461
+      inSlope: -0.00030567782
+      outSlope: -0.00030567782
+      tangentMode: 0
+    - time: 790.84625
+      value: 0.1668117
+      inSlope: -0.0011778759
+      outSlope: -0.0011778759
+      tangentMode: 0
+    - time: 900
+      value: 0.0048139542
+      inSlope: -0.00022457963
+      outSlope: -0.00022457963
+      tangentMode: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+--- !u!114 &114166984796280267
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1029416768856184}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name:
+--- !u!1 &1997504954244050
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4556684841477575}
+  - 114: {fileID: 15961069199608600}
+  m_Layer: 0
+  m_Name: MultiSparklesMain
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 4294967295
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4556684841477575
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1997504954244050}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children: []
+  m_Father: {fileID: 4993166597119702}
+--- !u!114 &15961069199608600
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1997504954244050}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7a1d5e3b9f24608a1b3c5d7e9f0a2b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  emitOnStart: 0
+  m_minSize: 0.4
+  m_maxSize: 2
+  minEnergy: 0.8
+  maxEnergy: 1
+  minEmission: 4
+  maxEmission: 8
+  worldVelocity: {x: 0, y: 0, z: 0}
+  localVelocity: {x: 0, y: 0, z: 0}
+  rndVelocity: {x: 0, y: 0, z: 0}
+  emitterVelocityScale: 0
+  tangentVelocity: {x: 0, y: 0, z: 0}
+  angularVelocity: 80
+  rndAngularVelocity: 0
+  rndRotation: 1
+  useWorldSpace: 0
+  oneShot: 0
+  ellipsoid: {x: 2, y: 2, z: 0}
+  minEmitterRange: 0
+  doesAnimateColor: 1
+  color0: {r: 1, g: 1, b: 1, a: 0.03922}
+  color1: {r: 1, g: 1, b: 1, a: 0.70588}
+  color2: {r: 1, g: 1, b: 1, a: 1}
+  color3: {r: 1, g: 1, b: 1, a: 0.70588}
+  color4: {r: 1, g: 1, b: 1, a: 0.03922}
+  worldRotationAxis: {x: 0, y: 0, z: 0}
+  localRotationAxis: {x: 0, y: 0, z: 0}
+  sizeGrow: 2
+  rndForce: {x: 0, y: 0, z: 0}
+  force: {x: 0, y: 0, z: 0}
+  damping: 0
+  autodestruct: 0
+  rendererEnabled: 1
+  rendererMaterial: {fileID: 2100000, guid: 8222791dd6178d74bb8f946fd1a4501d, type: 2}
+  stretchMode: 0
+  lengthScale: 2
+  velocityScale: 0
+  cameraVelocityScale: 0
+  maxParticleSize: 1
+  uvTilesX: 1
+  uvTilesY: 1
+  uvCycles: 1

@@ -1,0 +1,249 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &100100000
+Prefab:
+  serializedVersion: 2
+  m_ObjectHideFlags: 1
+  m_Modification:
+    m_TransformParent: {fileID: 0}
+    m_Modifications: []
+    m_RemovedComponents: []
+  m_ParentPrefab: {fileID: 0}
+  m_RootGameObject: {fileID: 1509418083793335}
+  m_IsPrefabParent: 1
+  m_IsExploded: 0
+--- !u!1 &1509418083793335
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4879345432376251}
+  - 111: {fileID: 111992213844938586}
+  - 114: {fileID: 114933133220005552}
+  - 114: {fileID: 114341447758478811}
+  m_Layer: 0
+  m_Name: BloodSpray
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4879345432376251
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1509418083793335}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -115.64819, y: 42.415123, z: -351.62112}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children:
+  - {fileID: 4914403488331556}
+  - {fileID: 4479086272717148}
+  m_Father: {fileID: 0}
+--- !u!111 &111992213844938586
+Animation:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1509418083793335}
+  m_Enabled: 1
+  m_Animation: {fileID: 7400000, guid: 07b4cc6ee64516743a79b459de05d7ba, type: 2}
+  m_Animations:
+  - {fileID: 7400000, guid: 07b4cc6ee64516743a79b459de05d7ba, type: 2}
+  m_WrapMode: 0
+  m_PlayAutomatically: 1
+  m_AnimatePhysics: 0
+  m_CullingType: 0
+  m_UserAABB:
+    m_Center: {x: 0, y: 0, z: 0}
+    m_Extent: {x: 0, y: 0, z: 0}
+--- !u!114 &114933133220005552
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1509418083793335}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbee05443b9b67f14985305ef056de27, type: 3}
+  m_Name:
+  sourcePrefabPath: Assets/Resources/FX/BloodSpray.prefab
+  basePrefabPath:
+  exemptObjects: []
+--- !u!114 &114341447758478811
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1509418083793335}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name:
+--- !u!1 &1506919313033924
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4914403488331556}
+  - 114: {fileID: 15104351477806747}
+  m_Layer: 0
+  m_Name: BloodSprayMain
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 4294967295
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4914403488331556
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1506919313033924}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 4.0737, y: -0.088768005, z: -12.177551}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children: []
+  m_Father: {fileID: 4879345432376251}
+--- !u!114 &15104351477806747
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1506919313033924}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7a1d5e3b9f24608a1b3c5d7e9f0a2b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  emitOnStart: 1
+  m_minSize: 1
+  m_maxSize: 1
+  minEnergy: 3
+  maxEnergy: 5
+  minEmission: 30
+  maxEmission: 30
+  worldVelocity: {x: 0, y: 0, z: 0}
+  localVelocity: {x: 0, y: 0, z: 0}
+  rndVelocity: {x: 0, y: 0, z: 0}
+  emitterVelocityScale: 2
+  tangentVelocity: {x: 0, y: 0, z: 6}
+  angularVelocity: 0
+  rndAngularVelocity: 0
+  rndRotation: 0
+  useWorldSpace: 1
+  oneShot: 1
+  ellipsoid: {x: 1, y: 1, z: 1}
+  minEmitterRange: 0
+  doesAnimateColor: 1
+  color0: {r: 1, g: 1, b: 1, a: 0.03922}
+  color1: {r: 1, g: 1, b: 1, a: 0.70588}
+  color2: {r: 1, g: 1, b: 1, a: 1}
+  color3: {r: 1, g: 1, b: 1, a: 0.70588}
+  color4: {r: 1, g: 1, b: 1, a: 0.03922}
+  worldRotationAxis: {x: 0, y: 0, z: 0}
+  localRotationAxis: {x: 0, y: 0, z: 1}
+  sizeGrow: 0
+  rndForce: {x: 0, y: 0, z: 6}
+  force: {x: 0, y: 0, z: 0}
+  damping: 1.3
+  autodestruct: 1
+  rendererEnabled: 1
+  rendererMaterial: {fileID: 2100000, guid: 03c2c635f3172294c8ffc6b8ce58ebcd, type: 2}
+  stretchMode: 0
+  lengthScale: 2
+  velocityScale: 3
+  cameraVelocityScale: 0
+  maxParticleSize: 0.25
+  uvTilesX: 1
+  uvTilesY: 1
+  uvCycles: 1
+--- !u!1 &1312809613478997
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4479086272717148}
+  - 114: {fileID: 15662860710549907}
+  m_Layer: 0
+  m_Name: BloodSpraySpread
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 4294967295
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4479086272717148
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1312809613478997}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 4.0737, y: -0.088768005, z: -12.177551}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children: []
+  m_Father: {fileID: 4879345432376251}
+--- !u!114 &15662860710549907
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1312809613478997}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7a1d5e3b9f24608a1b3c5d7e9f0a2b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  emitOnStart: 1
+  m_minSize: 0.5
+  m_maxSize: 2
+  minEnergy: 3
+  maxEnergy: 5
+  minEmission: 100
+  maxEmission: 100
+  worldVelocity: {x: 0, y: 0, z: 6}
+  localVelocity: {x: 0, y: 0, z: 3}
+  rndVelocity: {x: 0, y: 0, z: 0}
+  emitterVelocityScale: 2
+  tangentVelocity: {x: 0, y: 0, z: 6}
+  angularVelocity: 0
+  rndAngularVelocity: 0
+  rndRotation: 0
+  useWorldSpace: 1
+  oneShot: 1
+  ellipsoid: {x: 1, y: 1, z: 3}
+  minEmitterRange: 0
+  doesAnimateColor: 1
+  color0: {r: 1, g: 1, b: 1, a: 0.03922}
+  color1: {r: 1, g: 1, b: 1, a: 0.70588}
+  color2: {r: 1, g: 1, b: 1, a: 1}
+  color3: {r: 1, g: 1, b: 1, a: 0.70588}
+  color4: {r: 1, g: 1, b: 1, a: 0.03922}
+  worldRotationAxis: {x: 0, y: 0, z: 0}
+  localRotationAxis: {x: 0, y: 0, z: 1}
+  sizeGrow: 0
+  rndForce: {x: 0, y: 0, z: 6}
+  force: {x: 0, y: 0, z: 0}
+  damping: 1.3
+  autodestruct: 1
+  rendererEnabled: 1
+  rendererMaterial: {fileID: 2100000, guid: 03c2c635f3172294c8ffc6b8ce58ebcd, type: 2}
+  stretchMode: 0
+  lengthScale: 2
+  velocityScale: 3
+  cameraVelocityScale: 0
+  maxParticleSize: 0.25
+  uvTilesX: 1
+  uvTilesY: 1
+  uvCycles: 1

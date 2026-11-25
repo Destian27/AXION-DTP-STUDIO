@@ -1,0 +1,302 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &100100000
+Prefab:
+  serializedVersion: 2
+  m_ObjectHideFlags: 1
+  m_Modification:
+    m_TransformParent: {fileID: 0}
+    m_Modifications: []
+    m_RemovedComponents: []
+  m_ParentPrefab: {fileID: 0}
+  m_RootGameObject: {fileID: 1071533352500811}
+  m_IsPrefabParent: 1
+  m_IsExploded: 0
+--- !u!1 &1071533352500811
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4675280719523883}
+  - 114: {fileID: 114052963014028710}
+  - 114: {fileID: 114732752820867916}
+  - 114: {fileID: 114339119898813783}
+  - 82: {fileID: 82655236542642676}
+  - 114: {fileID: 114463880721720994}
+  m_Layer: 0
+  m_Name: Revive
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4675280719523883
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1071533352500811}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 38.151855, y: 17.03479, z: 3167.31}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children:
+  - {fileID: 4437797383444054}
+  - {fileID: 4714219752489998}
+  m_Father: {fileID: 0}
+--- !u!114 &114052963014028710
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1071533352500811}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbee05443b9b67f14985305ef056de27, type: 3}
+  m_Name:
+  sourcePrefabPath: Assets/Resources/FX/Revive.prefab
+  basePrefabPath:
+  exemptObjects: []
+--- !u!114 &114732752820867916
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1071533352500811}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1425cfafe549424a6c5c0c3f2b407eaf, type: 3}
+  m_Name:
+  deleteWhenAllChildrenDead: 1
+  autoDeleteAfterTime: 3
+  letParticlesFinishForTimedDelete: 1
+--- !u!114 &114339119898813783
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1071533352500811}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1e47676c60aa51d1684781d49acf8897, type: 3}
+  m_Name:
+--- !u!82 &82655236542642676
+AudioSource:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1071533352500811}
+  m_Enabled: 1
+  m_audioClip: {fileID: 8300000, guid: eddc2e879ca524d4e8b714e3c9d7cf02, type: 3}
+  m_PlayOnAwake: 0
+  m_Volume: 1
+  m_Pitch: 1
+  Loop: 0
+  Mute: 0
+  Priority: 128
+  DopplerLevel: 1
+  MinDistance: 1
+  MaxDistance: 500
+  Pan2D: 0
+  rolloffMode: 0
+  BypassEffects: 0
+  rolloffCustomCurve:
+    serializedVersion: 2
+    m_Curve: []
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+  panLevelCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+  spreadCustomCurve:
+    serializedVersion: 2
+    m_Curve:
+    - time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+--- !u!114 &114463880721720994
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1071533352500811}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name:
+--- !u!1 &1865879821544249
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4437797383444054}
+  - 114: {fileID: 15193484483598002}
+  m_Layer: 0
+  m_Name: BeamRevive
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 4294967295
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4437797383444054
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1865879821544249}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 167.44836, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children: []
+  m_Father: {fileID: 4675280719523883}
+--- !u!114 &15193484483598002
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1865879821544249}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7a1d5e3b9f24608a1b3c5d7e9f0a2b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  emitOnStart: 1
+  m_minSize: 300
+  m_maxSize: 500
+  minEnergy: 2
+  maxEnergy: 2
+  minEmission: 1
+  maxEmission: 1
+  worldVelocity: {x: 0, y: 0, z: 0}
+  localVelocity: {x: 0, y: 2000, z: 0}
+  rndVelocity: {x: 0, y: 300, z: 0}
+  emitterVelocityScale: 500
+  tangentVelocity: {x: 0, y: 0, z: 0}
+  angularVelocity: 0
+  rndAngularVelocity: 0
+  rndRotation: 0
+  useWorldSpace: 0
+  oneShot: 0
+  ellipsoid: {x: 0, y: 0, z: 0}
+  minEmitterRange: 0
+  doesAnimateColor: 1
+  color0: {r: 0.93333, g: 0.45882, b: 0.45882, a: 0.03922}
+  color1: {r: 0.78431, g: 0.27451, b: 0.27451, a: 0.70588}
+  color2: {r: 0.95686, g: 0.61961, b: 0.61961, a: 1}
+  color3: {r: 0.86667, g: 0.23922, b: 0.23922, a: 0.70588}
+  color4: {r: 0.91765, g: 0.34118, b: 0.34118, a: 0.03922}
+  worldRotationAxis: {x: 0, y: 0, z: 0}
+  localRotationAxis: {x: 0, y: 0, z: 0}
+  sizeGrow: 0
+  rndForce: {x: 0, y: 0, z: 0}
+  force: {x: 0, y: 0, z: 0}
+  damping: 0
+  autodestruct: 0
+  rendererEnabled: 1
+  rendererMaterial: {fileID: 2100000, guid: e0f48ca4e32896e41bdb4a64b274ea38, type: 2}
+  stretchMode: 0
+  lengthScale: 2
+  velocityScale: 0
+  cameraVelocityScale: 0
+  maxParticleSize: 4
+  uvTilesX: 1
+  uvTilesY: 1
+  uvCycles: 1
+--- !u!1 &1441412509664232
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4714219752489998}
+  - 114: {fileID: 15335867535534412}
+  m_Layer: 0
+  m_Name: MainRevive
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 4294967295
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4714219752489998
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1441412509664232}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 129.35498, y: 94.434814, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children: []
+  m_Father: {fileID: 4675280719523883}
+--- !u!114 &15335867535534412
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1441412509664232}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7a1d5e3b9f24608a1b3c5d7e9f0a2b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  emitOnStart: 1
+  m_minSize: 120
+  m_maxSize: 200
+  minEnergy: 1
+  maxEnergy: 1
+  minEmission: 1
+  maxEmission: 2
+  worldVelocity: {x: 0, y: 0, z: 0}
+  localVelocity: {x: 0, y: 300, z: 0}
+  rndVelocity: {x: 0, y: 0, z: 0}
+  emitterVelocityScale: 0
+  tangentVelocity: {x: 0, y: 0, z: 0}
+  angularVelocity: 10
+  rndAngularVelocity: 0
+  rndRotation: 0
+  useWorldSpace: 0
+  oneShot: 0
+  ellipsoid: {x: 5, y: 5, z: 5}
+  minEmitterRange: 0
+  doesAnimateColor: 1
+  color0: {r: 1, g: 1, b: 1, a: 0.03922}
+  color1: {r: 1, g: 1, b: 1, a: 0.70588}
+  color2: {r: 1, g: 1, b: 1, a: 1}
+  color3: {r: 1, g: 1, b: 1, a: 0.70588}
+  color4: {r: 1, g: 1, b: 1, a: 0.03922}
+  worldRotationAxis: {x: 0, y: 0, z: 0}
+  localRotationAxis: {x: 0, y: 0, z: 0}
+  sizeGrow: 0.2
+  rndForce: {x: 0, y: 0, z: 0}
+  force: {x: 0, y: 0, z: 0}
+  damping: 0
+  autodestruct: 0
+  rendererEnabled: 1
+  rendererMaterial: {fileID: 2100000, guid: 361cb88320a9e3843998af63c82fc6cf, type: 2}
+  stretchMode: 0
+  lengthScale: 2
+  velocityScale: 0
+  cameraVelocityScale: 0
+  maxParticleSize: 1
+  uvTilesX: 1
+  uvTilesY: 1
+  uvCycles: 1

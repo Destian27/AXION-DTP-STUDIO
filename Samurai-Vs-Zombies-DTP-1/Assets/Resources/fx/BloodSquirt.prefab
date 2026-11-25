@@ -1,0 +1,120 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &100100000
+Prefab:
+  serializedVersion: 2
+  m_ObjectHideFlags: 1
+  m_Modification:
+    m_TransformParent: {fileID: 0}
+    m_Modifications: []
+    m_RemovedComponents: []
+  m_ParentPrefab: {fileID: 0}
+  m_RootGameObject: {fileID: 1033958736606662}
+  m_IsPrefabParent: 1
+  m_IsExploded: 0
+--- !u!1 &1033958736606662
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4430362166169531}
+  - 114: {fileID: 15943557399058872}
+  - 114: {fileID: 114535195622206519}
+  - 114: {fileID: 114144784529423873}
+  m_Layer: 0
+  m_Name: BloodSquirt
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 4294967295
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4430362166169531
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1033958736606662}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -346.4016, y: 214.31177, z: -357.06976}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children: []
+  m_Father: {fileID: 0}
+--- !u!114 &15943557399058872
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1033958736606662}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7a1d5e3b9f24608a1b3c5d7e9f0a2b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  emitOnStart: 1
+  m_minSize: 40
+  m_maxSize: 40
+  minEnergy: 0.4
+  maxEnergy: 0.5
+  minEmission: 1
+  maxEmission: 1
+  worldVelocity: {x: 0, y: 0, z: 0}
+  localVelocity: {x: 0, y: 0, z: 0}
+  rndVelocity: {x: 0, y: 0, z: 0}
+  emitterVelocityScale: 0
+  tangentVelocity: {x: 0, y: 0, z: 0}
+  angularVelocity: 0
+  rndAngularVelocity: 0
+  rndRotation: 0
+  useWorldSpace: 1
+  oneShot: 1
+  ellipsoid: {x: 0, y: 0, z: 0}
+  minEmitterRange: 0
+  doesAnimateColor: 1
+  color0: {r: 0.96078, g: 0.26667, b: 0.26667, a: 0.03922}
+  color1: {r: 0.66275, g: 0.08235, b: 0.08235, a: 0.70588}
+  color2: {r: 0.55294, g: 0.05098, b: 0.05098, a: 1}
+  color3: {r: 0.36471, g: 0.01176, b: 0.01176, a: 0.70588}
+  color4: {r: 0.18824, g: 0.01176, b: 0.01176, a: 0.03922}
+  worldRotationAxis: {x: 0, y: 0, z: 0}
+  localRotationAxis: {x: 0, y: 0, z: 0}
+  sizeGrow: 0
+  rndForce: {x: 0, y: 0, z: 0}
+  force: {x: 0, y: 0, z: 0}
+  damping: 1
+  autodestruct: 1
+  rendererEnabled: 1
+  rendererMaterial: {fileID: 2100000, guid: 55f64b7d5c31b914184bf12108ce4f1d, type: 2}
+  stretchMode: 0
+  lengthScale: 0
+  velocityScale: 0
+  cameraVelocityScale: 0
+  maxParticleSize: 0.75
+  uvTilesX: 3
+  uvTilesY: 3
+  uvCycles: 1
+--- !u!114 &114535195622206519
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1033958736606662}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbee05443b9b67f14985305ef056de27, type: 3}
+  m_Name:
+  sourcePrefabPath: Assets/Resources/FX/BloodSquirt.prefab
+  basePrefabPath:
+  exemptObjects: []
+--- !u!114 &114144784529423873
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1033958736606662}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name:

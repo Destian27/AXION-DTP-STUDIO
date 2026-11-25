@@ -1,0 +1,473 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1001 &100100000
+Prefab:
+  serializedVersion: 2
+  m_ObjectHideFlags: 1
+  m_Modification:
+    m_TransformParent: {fileID: 0}
+    m_Modifications: []
+    m_RemovedComponents: []
+  m_ParentPrefab: {fileID: 0}
+  m_RootGameObject: {fileID: 1197145442224356}
+  m_IsPrefabParent: 1
+  m_IsExploded: 0
+--- !u!1 &1197145442224356
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4830846568772403}
+  - 114: {fileID: 114241821260515238}
+  - 114: {fileID: 114342729690920336}
+  - 114: {fileID: 114066701935845125}
+  - 114: {fileID: 114499751474018809}
+  - 114: {fileID: 114611300834279834}
+  m_Layer: 0
+  m_Name: ExplosionBig
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4830846568772403
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1197145442224356}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 35.722, y: 122.31621, z: 345.77045}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children:
+  - {fileID: 4308333662251154}
+  - {fileID: 4654117897106767}
+  - {fileID: 4375786745793542}
+  - {fileID: 4939714576115711}
+  m_Father: {fileID: 0}
+--- !u!114 &114241821260515238
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1197145442224356}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbee05443b9b67f14985305ef056de27, type: 3}
+  m_Name:
+  sourcePrefabPath: Assets/Resources/FX/ExplosionBig.prefab
+  basePrefabPath:
+  exemptObjects:
+  - {fileID: 15379277771327877}
+--- !u!114 &114342729690920336
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1197145442224356}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30ac76d5c958184d09bab5d0901acb79, type: 3}
+  m_Name:
+--- !u!114 &114066701935845125
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1197145442224356}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1425cfafe549424a6c5c0c3f2b407eaf, type: 3}
+  m_Name:
+  deleteWhenAllChildrenDead: 1
+  autoDeleteAfterTime: 0
+  letParticlesFinishForTimedDelete: 1
+--- !u!114 &114499751474018809
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1197145442224356}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39dbae7d6e4503ccce4e243938d2e0ad, type: 3}
+  m_Name:
+  baseTheme: {fileID: 0}
+  defaultMinDistance: 150
+  defaultMaxDistance: 4000
+  defaultCustomEffect: {fileID: 0}
+  positionOffset: {x: 0, y: 0, z: 0}
+  autoPlayEvent: Spawn
+  events:
+  - name: Spawn
+    clips:
+    - {fileID: 8300000, guid: a7c5d341225a3934f8702b87e70d5b45, type: 3}
+    - {fileID: 8300000, guid: 9fc49b8ed94253e4d858398eb2fddf35, type: 3}
+    - {fileID: 8300000, guid: f28b6167de7f9a946b56ba6f9292b60c, type: 3}
+    percentChanceNone: 0
+    pitchVariance: 0.3
+    volume: 0
+    isVoice: 0
+    playLimit: 3
+    priority: 0
+    trackPositionAndLifetime: 0
+    fadeInTime: 0
+    fadeOutTime: 0
+    customEffect: {fileID: 0}
+    loop: 0
+    minDistanceOverride: 0
+    maxDistanceOverride: 0
+    useLogarithmicRolloff: 0
+--- !u!114 &114611300834279834
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1197145442224356}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name:
+--- !u!1 &1501492391461645
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4308333662251154}
+  - 114: {fileID: 15571562893515400}
+  - 114: {fileID: 114891329045148862}
+  m_Layer: 0
+  m_Name: ExplosionBoom
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 4294967295
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4308333662251154
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1501492391461645}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: -40}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children: []
+  m_Father: {fileID: 4830846568772403}
+--- !u!114 &15571562893515400
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1501492391461645}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7a1d5e3b9f24608a1b3c5d7e9f0a2b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  emitOnStart: 1
+  m_minSize: 60
+  m_maxSize: 150
+  minEnergy: 0.4
+  maxEnergy: 0.8
+  minEmission: 1
+  maxEmission: 1
+  worldVelocity: {x: 0, y: 0, z: 0}
+  localVelocity: {x: 0, y: 0, z: 0}
+  rndVelocity: {x: 0, y: 0, z: 0}
+  emitterVelocityScale: 0
+  tangentVelocity: {x: 0, y: 0, z: 0}
+  angularVelocity: 0
+  rndAngularVelocity: 0
+  rndRotation: 0
+  useWorldSpace: 0
+  oneShot: 1
+  ellipsoid: {x: 0, y: 0, z: 0}
+  minEmitterRange: 0
+  doesAnimateColor: 1
+  color0: {r: 1, g: 1, b: 1, a: 0.07059}
+  color1: {r: 1, g: 1, b: 1, a: 0.67451}
+  color2: {r: 1, g: 1, b: 1, a: 1}
+  color3: {r: 1, g: 1, b: 1, a: 0.70588}
+  color4: {r: 1, g: 1, b: 1, a: 0.03922}
+  worldRotationAxis: {x: 0, y: 0, z: 0}
+  localRotationAxis: {x: 0, y: 0, z: 0}
+  sizeGrow: 4
+  rndForce: {x: 0, y: 0, z: 0}
+  force: {x: 0, y: 0, z: 0}
+  damping: 1
+  autodestruct: 1
+  rendererEnabled: 1
+  rendererMaterial: {fileID: 2100000, guid: ffa9736e3a0281348ad9513a6c3450a8, type: 2}
+  stretchMode: 0
+  lengthScale: 2
+  velocityScale: 0
+  cameraVelocityScale: 0
+  maxParticleSize: 0.4
+  uvTilesX: 1
+  uvTilesY: 1
+  uvCycles: 1
+--- !u!114 &114891329045148862
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1501492391461645}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dac5479c15acccf451f7d334db7f4f15, type: 3}
+  m_Name:
+  materials:
+  - {fileID: 2100000, guid: ffa9736e3a0281348ad9513a6c3450a8, type: 2}
+  - {fileID: 2100000, guid: 9585672f8ab776a46b31514312361e5b, type: 2}
+  - {fileID: 2100000, guid: 27c2d1b052bae7a40a68de61e8aee147, type: 2}
+  - {fileID: 2100000, guid: 176e72dc14ce97e4a8ce2203b22cf590, type: 2}
+--- !u!1 &1588323899409617
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4654117897106767}
+  - 114: {fileID: 15804061955822944}
+  m_Layer: 0
+  m_Name: ExplosionDebris
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 4294967295
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4654117897106767
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1588323899409617}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children: []
+  m_Father: {fileID: 4830846568772403}
+--- !u!114 &15804061955822944
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1588323899409617}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7a1d5e3b9f24608a1b3c5d7e9f0a2b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  emitOnStart: 1
+  m_minSize: 16
+  m_maxSize: 45
+  minEnergy: 0.8
+  maxEnergy: 1.6
+  minEmission: 4
+  maxEmission: 8
+  worldVelocity: {x: 0, y: 0, z: 0}
+  localVelocity: {x: 0, y: 200, z: 0}
+  rndVelocity: {x: 100, y: 50, z: 180}
+  emitterVelocityScale: 0
+  tangentVelocity: {x: 4, y: 4, z: 4}
+  angularVelocity: 0
+  rndAngularVelocity: 90
+  rndRotation: 1
+  useWorldSpace: 0
+  oneShot: 1
+  ellipsoid: {x: 1, y: 1, z: 1}
+  minEmitterRange: 0
+  doesAnimateColor: 1
+  color0: {r: 1, g: 1, b: 1, a: 0.03922}
+  color1: {r: 1, g: 1, b: 1, a: 0.70588}
+  color2: {r: 1, g: 1, b: 1, a: 1}
+  color3: {r: 1, g: 1, b: 1, a: 0.70588}
+  color4: {r: 1, g: 1, b: 1, a: 0.03922}
+  worldRotationAxis: {x: 0, y: 0, z: 0}
+  localRotationAxis: {x: 0, y: 0, z: 0}
+  sizeGrow: 0
+  rndForce: {x: 100, y: 100, z: 100}
+  force: {x: 1, y: -200, z: 1}
+  damping: 1
+  autodestruct: 1
+  rendererEnabled: 1
+  rendererMaterial: {fileID: 2100000, guid: 79142efe589078d448ed2cc1938ffbcf, type: 2}
+  stretchMode: 0
+  lengthScale: 2
+  velocityScale: 0
+  cameraVelocityScale: 0
+  maxParticleSize: 0.25
+  uvTilesX: 1
+  uvTilesY: 1
+  uvCycles: 1
+--- !u!1 &1543678280744655
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4375786745793542}
+  - 114: {fileID: 15379277771327877}
+  m_Layer: 0
+  m_Name: ExplosionSmoke
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 4294967295
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4375786745793542
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1543678280744655}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 51.10901, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children: []
+  m_Father: {fileID: 4830846568772403}
+--- !u!114 &15379277771327877
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1543678280744655}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7a1d5e3b9f24608a1b3c5d7e9f0a2b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  emitOnStart: 1
+  m_minSize: 80
+  m_maxSize: 200
+  minEnergy: 1
+  maxEnergy: 4
+  minEmission: 2
+  maxEmission: 4
+  worldVelocity: {x: 0, y: 0, z: 0}
+  localVelocity: {x: 0, y: 48, z: 0}
+  rndVelocity: {x: 0, y: 48, z: 0}
+  emitterVelocityScale: 0
+  tangentVelocity: {x: 0, y: 0, z: 0}
+  angularVelocity: 12
+  rndAngularVelocity: 0
+  rndRotation: 1
+  useWorldSpace: 0
+  oneShot: 1
+  ellipsoid: {x: 12, y: 12, z: 12}
+  minEmitterRange: 0
+  doesAnimateColor: 1
+  color0: {r: 1, g: 1, b: 1, a: 0.03922}
+  color1: {r: 1, g: 1, b: 1, a: 0.70588}
+  color2: {r: 1, g: 1, b: 1, a: 1}
+  color3: {r: 1, g: 1, b: 1, a: 0.70588}
+  color4: {r: 1, g: 1, b: 1, a: 0.03922}
+  worldRotationAxis: {x: 0, y: 0, z: 0}
+  localRotationAxis: {x: 0, y: 0, z: 0}
+  sizeGrow: 1
+  rndForce: {x: 0, y: 0, z: 0}
+  force: {x: 0, y: 0, z: 0}
+  damping: 1
+  autodestruct: 1
+  rendererEnabled: 1
+  rendererMaterial: {fileID: 2100000, guid: 816d7f63082941741ac65e5ad1f98049, type: 2}
+  stretchMode: 0
+  lengthScale: 2
+  velocityScale: 0
+  cameraVelocityScale: 0
+  maxParticleSize: 0.5
+  uvTilesX: 1
+  uvTilesY: 1
+  uvCycles: 1
+--- !u!1 &1527368718841245
+GameObject:
+  serializedVersion: 3
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_Component:
+  - 4: {fileID: 4939714576115711}
+  - 114: {fileID: 15018662393092087}
+  m_Layer: 0
+  m_Name: MainExplosion
+  m_TagString: Untagged
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 4294967295
+  m_IsActive: 1
+  m_Icon: {fileID: 0}
+--- !u!4 &4939714576115711
+Transform:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1527368718841245}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 51.10901, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
+  m_Children: []
+  m_Father: {fileID: 4830846568772403}
+--- !u!114 &15018662393092087
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1527368718841245}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c7a1d5e3b9f24608a1b3c5d7e9f0a2b4, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  emitOnStart: 1
+  m_minSize: 80
+  m_maxSize: 200
+  minEnergy: 0.4
+  maxEnergy: 0.8
+  minEmission: 2
+  maxEmission: 3
+  worldVelocity: {x: 0, y: 0, z: 0}
+  localVelocity: {x: 0, y: 0, z: 0}
+  rndVelocity: {x: 0, y: 0, z: 0}
+  emitterVelocityScale: 12
+  tangentVelocity: {x: 0, y: 0, z: 0}
+  angularVelocity: 3
+  rndAngularVelocity: 0
+  rndRotation: 1
+  useWorldSpace: 0
+  oneShot: 1
+  ellipsoid: {x: 3, y: 3, z: 3}
+  minEmitterRange: 0
+  doesAnimateColor: 1
+  color0: {r: 1, g: 1, b: 1, a: 0.64314}
+  color1: {r: 0.98431, g: 1, b: 0.56863, a: 1}
+  color2: {r: 0.97647, g: 0.96863, b: 0.22745, a: 1}
+  color3: {r: 1, g: 0.74118, b: 0.22353, a: 0.70588}
+  color4: {r: 0.11373, g: 0.1098, b: 0.1098, a: 0}
+  worldRotationAxis: {x: 0, y: 0, z: 0}
+  localRotationAxis: {x: 0, y: 0, z: 0}
+  sizeGrow: 5
+  rndForce: {x: 0, y: 0, z: 0}
+  force: {x: 0, y: 0, z: 0}
+  damping: 1
+  autodestruct: 1
+  rendererEnabled: 1
+  rendererMaterial: {fileID: 2100000, guid: 227458388ff6a6148a2a538e6d878411, type: 2}
+  stretchMode: 0
+  lengthScale: 2
+  velocityScale: 0
+  cameraVelocityScale: 0
+  maxParticleSize: 0.5
+  uvTilesX: 1
+  uvTilesY: 1
+  uvCycles: 1
