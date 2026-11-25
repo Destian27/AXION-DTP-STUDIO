@@ -2,17 +2,11 @@ using System;
 using System.IO;
 using System.Linq;
 using UnityEditor;
-using UnityEditor.AddressableAssets;
-using UnityEditor.AddressableAssets.Build;
-using UnityEditor.AddressableAssets.Build.DataBuilders;
-using UnityEditor.AddressableAssets.Settings;
-using UnityEditor.Build.Reporting;
 using UnityEngine;
 
 /// <summary>
-/// Build Android untuk CI (GitHub Actions / game-ci unity-builder).
+/// Build APK Android lewat command line / GitHub Actions (game-ci).
 /// Dipanggil lewat: buildMethod: CIBuild.BuildAndroid
-/// Urutan: cek scene -> build konten Addressables -> build APK.
 /// </summary>
 public static class CIBuild
 {
@@ -38,13 +32,13 @@ public static class CIBuild
         string name = GetArg("customBuildName") ?? DefaultName;
         Directory.CreateDirectory(outDir);
 
-        // 1) Scene di Build Settings harus benar-benar ada di repo.
+        // Scene di Build Settings harus benar-benar ada.
         var enabled = EditorBuildSettings.scenes.Where(s => s.enabled).ToArray();
         var missing = enabled.Where(s => !File.Exists(s.path)).Select(s => s.path).ToArray();
         if (enabled.Length == 0 || missing.Length > 0)
         {
             foreach (var m in missing)
-                Debug.LogError($"[CIBuild] Scene ada di Build Settings tapi filenya tidak ada di repo: {m}");
+                Debug.LogError("[CIBuild] Scene ada di Build Settings tapi filenya tidak ada: " + m);
             if (enabled.Length == 0)
                 Debug.LogError("[CIBuild] Tidak ada scene yang aktif di Build Settings.");
             EditorApplication.Exit(1);
@@ -52,38 +46,19 @@ public static class CIBuild
         }
         string[] scenes = enabled.Select(s => s.path).ToArray();
 
-        // 2) Pastikan target Android.
         if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
             EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.Android, BuildTarget.Android);
 
-        // 2b) Pengaturan Android wajib: min Android 7.0 (API 24), target API 35, IL2CPP, ARMv7 + ARM64, GLES3.
-        ApplyAndroidSettings();
+        PlayerSettings.productName = "Samurai vs Zombie DTP";
+        PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, "com.dtp.samuraivszombie2");
+        PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);
+        AndroidSigning.Apply();
 
-        // 3) Versi dari CI (opsional).
         string versionCode = GetArg("androidVersionCode");
-        if (int.TryParse(versionCode, out int code) && code > 0)
+        int code;
+        if (int.TryParse(versionCode, out code) && code > 0)
             PlayerSettings.Android.bundleVersionCode = code;
-        string version = GetArg("buildVersion");
-        if (!string.IsNullOrEmpty(version) && version != "none")
-            PlayerSettings.bundleVersion = version;
 
-        // 4) Build konten Addressables (game ini memuat scene/data lewat Addressables).
-        var settings = AddressableAssetSettingsDefaultObject.Settings;
-        if (settings == null)
-            throw new Exception("[CIBuild] AddressableAssetSettings tidak ditemukan.");
-
-        int packedIndex = settings.DataBuilders.FindIndex(b => b is BuildScriptPackedMode);
-        if (packedIndex < 0)
-            throw new Exception("[CIBuild] BuildScriptPackedMode tidak ada di DataBuilders.");
-        settings.ActivePlayerDataBuilderIndex = packedIndex;
-
-        AddressableAssetSettings.BuildPlayerContent(out AddressablesPlayerBuildResult addrResult);
-        if (!string.IsNullOrEmpty(addrResult.Error))
-            throw new Exception("[CIBuild] Build Addressables gagal: " + addrResult.Error);
-        Debug.Log("[CIBuild] Addressables selesai dibuild.");
-
-        // 5) Build APK.
-        EditorUserBuildSettings.buildAppBundle = false;
         var options = new BuildPlayerOptions
         {
             scenes = scenes,
@@ -92,42 +67,16 @@ public static class CIBuild
             options = BuildOptions.None
         };
 
-        BuildReport report = BuildPipeline.BuildPlayer(options);
-        BuildSummary summary = report.summary;
-        Debug.Log($"[CIBuild] Hasil: {summary.result}, ukuran {summary.totalSize / (1024 * 1024)} MB, error {summary.totalErrors}");
-        EditorApplication.Exit(summary.result == BuildResult.Succeeded ? 0 : 1);
-    }
-
-    private static void ApplyAndroidSettings()
-    {
-        PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel24;
-        PlayerSettings.Android.targetSdkVersion = (AndroidSdkVersions)35;
-        PlayerSettings.SetScriptingBackend(UnityEditor.Build.NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
-        PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARMv7 | AndroidArchitecture.ARM64;
-        PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
-        PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3 });
-        PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, "com.dtp.samuraivszombie");
-
-        // Tanda tangan tetap -> APK versi baru bisa menimpa versi lama tanpa "aplikasi tidak terinstal".
-        string ksPath = Environment.GetEnvironmentVariable("ANDROID_KEYSTORE_PATH");
-        if (string.IsNullOrEmpty(ksPath)) ksPath = "Keystore/dtp.keystore";
-        string ksPass = Environment.GetEnvironmentVariable("ANDROID_KEYSTORE_PASS");
-        if (string.IsNullOrEmpty(ksPass)) ksPass = "dtp123456";
-        string alias = Environment.GetEnvironmentVariable("ANDROID_KEYALIAS_NAME");
-        if (string.IsNullOrEmpty(alias)) alias = "dtpkey";
-        string aliasPass = Environment.GetEnvironmentVariable("ANDROID_KEYALIAS_PASS");
-        if (string.IsNullOrEmpty(aliasPass)) aliasPass = ksPass;
-
-        if (!File.Exists(ksPath))
-            throw new Exception("[CIBuild] Keystore tidak ditemukan: " + ksPath);
-
-        PlayerSettings.Android.useCustomKeystore = true;
-        PlayerSettings.Android.keystoreName = ksPath;
-        PlayerSettings.Android.keystorePass = ksPass;
-        PlayerSettings.Android.keyaliasName = alias;
-        PlayerSettings.Android.keyaliasPass = aliasPass;
-
-        Debug.Log("[CIBuild] Android: minSdk=24, targetSdk=35, IL2CPP, ARMv7+ARM64, GLES3, keystore=" + ksPath);
+#if UNITY_2018_1_OR_NEWER
+        var report = BuildPipeline.BuildPlayer(options);
+        bool ok = report.summary.result == UnityEditor.Build.Reporting.BuildResult.Succeeded;
+        Debug.Log("[CIBuild] Hasil: " + report.summary.result + ", error " + report.summary.totalErrors);
+#else
+        string error = BuildPipeline.BuildPlayer(options);
+        bool ok = string.IsNullOrEmpty(error);
+        if (!ok) Debug.LogError("[CIBuild] " + error);
+#endif
+        EditorApplication.Exit(ok ? 0 : 1);
     }
 
     private static string GetArg(string name)

@@ -1,8 +1,15 @@
-# *Shin Samurai vs Zombies Defence*
-![Title Screen](https://github.com/user-attachments/assets/efdd683d-4aec-4731-9a31-2f2b49fc9912)
+# Samurai vs Zombie DTP
 
-***[Shin Samurai vs Zombies Defence](https://svzdefense.wiki.gg/wiki/Mod:Shin_Samurai_vs_Zombies_Defence)*** (tentative) is a remake of the *Samurai vs Zombies Defense* series, combining both games and expanding them further.
+Proyek Unity **2017.4.40f1** (hasil ekspor Samurai vs Zombies).
 
-It is currently in development with no estimated release date, but will have periodic playtests as it progresses - the first of which is already available at [itch.io](https://kojobailey.itch.io/shin-svz)!
+- Nama aplikasi: `Samurai vs Zombie DTP`
+- Package Android: `com.dtp.samuraivszombie2` (beda dari proyek lain, jadi bisa terpasang berdampingan)
+- Backend: IL2CPP, tanda tangan tetap `Keystore/dtp.keystore`
+  (alias `dtpkey`, password `dtp123456`). Pengaturan ini terisi otomatis saat Unity dibuka
+  lewat `Assets/Editor/AndroidSigning.cs`; bisa juga lewat menu **DTP > Terapkan Keystore Android**.
 
-You may also be interested in joining our *Samurai vs Zombies Defense* community on Discord, where there will be updates on the development of this game: https://discord.gg/9nNeTYrpaj
+## Build
+1. Buka folder ini dengan Unity Hub memakai versi 2017.4.40f1 + modul Android Build Support (SDK, NDK, OpenJDK).
+2. File > Build Settings > Android > Build.
+
+CI: `.github/workflows/build-android.yml` (isi secrets UNITY_LICENSE, UNITY_EMAIL, UNITY_PASSWORD).
