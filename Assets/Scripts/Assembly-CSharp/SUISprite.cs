@@ -1,12 +1,21 @@
 using UnityEngine;
 
+// Versi Unity 2020: GUITexture diganti SpriteRenderer pada kamera SUICamera.
 public class SUISprite : SUIWidget
 {
 	private string mTextureFile;
 
 	private string mLocalizedTextureFile;
 
-	private GUITexture mTexture;
+	private Texture2D mTex;
+
+	private Sprite mSprite;
+
+	private GameObject mSpriteObject;
+
+	private SpriteRenderer mRenderer;
+
+	private float mAlpha = 1f;
 
 	private Vector2 mScale = new Vector2(1f, 1f);
 
@@ -37,14 +46,17 @@ public class SUISprite : SUIWidget
 	{
 		get
 		{
-			return mTexture.color.a * 2f;
+			return mAlpha;
 		}
 		set
 		{
-			float num = value / 2f;
-			if ((bool)mTexture && mTexture.color.a != num)
+			if (mAlpha != value)
 			{
-				mTexture.color = new Color(0.5f, 0.5f, 0.5f, num);
+				mAlpha = value;
+				if (mRenderer != null)
+				{
+					mRenderer.color = new Color(1f, 1f, 1f, Mathf.Clamp01(value));
+				}
 			}
 		}
 	}
@@ -53,7 +65,7 @@ public class SUISprite : SUIWidget
 	{
 		get
 		{
-			return mTexture.texture.width;
+			return (mTex != null) ? mTex.width : 0f;
 		}
 	}
 
@@ -61,7 +73,7 @@ public class SUISprite : SUIWidget
 	{
 		get
 		{
-			return mTexture.texture.height;
+			return (mTex != null) ? mTex.height : 0f;
 		}
 	}
 
@@ -123,7 +135,13 @@ public class SUISprite : SUIWidget
 	{
 		get
 		{
-			return SUIUtils.unityToUser(mTexture.GetScreenRect());
+			if (mRenderer == null || mTex == null)
+			{
+				return new Rect(position.x, position.y, 0f, 0f);
+			}
+			Bounds bounds = mRenderer.bounds;
+			Rect r = new Rect(bounds.min.x, bounds.min.y, bounds.size.x, bounds.size.y);
+			return SUIUtils.unityToUser(r);
 		}
 	}
 
@@ -147,45 +165,60 @@ public class SUISprite : SUIWidget
 			}
 		}
 		texture2D.Apply();
-		mTexture = (GUITexture)mGameObject.AddComponent<GUITexture>();
-		mTexture.texture = texture2D;
-		mTexture.transform.localScale = Vector3.zero;
+		setTexture(texture2D);
 	}
 
 	public override void Destroy()
 	{
-		Object.Destroy(mTexture);
-		mTexture = null;
+		if (mSprite != null)
+		{
+			Object.Destroy(mSprite);
+		}
+		mSprite = null;
+		mRenderer = null;
+		mSpriteObject = null;
 		base.Destroy();
 	}
 
 	public void SetDynamicTextureColor(Color c)
 	{
-		Texture2D texture2D = (Texture2D)mTexture.texture;
+		if (mTex == null)
+		{
+			return;
+		}
 		for (int i = 0; (float)i < height; i++)
 		{
 			for (int j = 0; (float)j < width; j++)
 			{
-				texture2D.SetPixel(j, i, c);
+				mTex.SetPixel(j, i, c);
 			}
 		}
-		texture2D.Apply();
+		mTex.Apply();
 	}
 
 	public override void EditorRenderOnGUI()
 	{
+		if (mTex == null)
+		{
+			return;
+		}
 		Color color = GUI.color;
 		GUI.color = new Color(1f, 1f, 1f, alpha);
-		GUI.DrawTexture(area, mTexture.texture);
+		GUI.DrawTexture(area, mTex);
 		GUI.color = color;
+	}
+
+	protected override void updatePosition()
+	{
+		base.updatePosition();
+		if (mRenderer != null)
+		{
+			mRenderer.sortingOrder = sortingOrder;
+		}
 	}
 
 	private void reloadTexture()
 	{
-		if (mTexture == null)
-		{
-			mTexture = (GUITexture)mGameObject.AddComponent<GUITexture>();
-		}
 		Texture2D texture2D = null;
 		if (SUIScreen.isDevice_iPad3)
 		{
@@ -205,15 +238,40 @@ public class SUISprite : SUIWidget
 			}
 			mHDScaleRatio = 1f;
 		}
-		mTexture.texture = texture2D;
-		mTexture.transform.localScale = Vector3.zero;
+		setTexture(texture2D);
+	}
+
+	private void setTexture(Texture2D tex)
+	{
+		mTex = tex;
+		if (mSpriteObject == null)
+		{
+			mSpriteObject = new GameObject("SUISpriteRenderer");
+			mSpriteObject.layer = mGameObject.layer;
+			mSpriteObject.transform.SetParent(mGameObject.transform, false);
+			mRenderer = mSpriteObject.AddComponent<SpriteRenderer>();
+		}
+		if (mSprite != null)
+		{
+			Object.Destroy(mSprite);
+		}
+		mSprite = Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height), Vector2.zero, 1f, 0u, SpriteMeshType.FullRect);
+		mRenderer.sprite = mSprite;
+		mRenderer.color = new Color(1f, 1f, 1f, Mathf.Clamp01(mAlpha));
+		mRenderer.sortingOrder = sortingOrder;
 		updateScale();
 	}
 
 	private void updateScale()
 	{
+		if (mTex == null || mSpriteObject == null)
+		{
+			return;
+		}
 		AutoScaler autoScaler = WeakGlobalInstance<SUIScreen>.instance.autoScaler;
-		Vector2 vector = ((!mAutoScaleKeepAspectRatio) ? new Vector2(autoScaler.toDeviceX((float)mTexture.texture.width * scale.x * mHDScaleRatio), autoScaler.toDeviceY((float)mTexture.texture.height * scale.y * mHDScaleRatio)) : new Vector2(autoScaler.toDevice((float)mTexture.texture.width * scale.x * mHDScaleRatio), autoScaler.toDevice((float)mTexture.texture.height * scale.y * mHDScaleRatio)));
-		mTexture.pixelInset = new Rect(0f - vector.x * mHotspot.x, 0f - vector.y * (1f - mHotspot.y), vector.x, vector.y);
+		Vector2 vector = ((!mAutoScaleKeepAspectRatio) ? new Vector2(autoScaler.toDeviceX((float)mTex.width * scale.x * mHDScaleRatio), autoScaler.toDeviceY((float)mTex.height * scale.y * mHDScaleRatio)) : new Vector2(autoScaler.toDevice((float)mTex.width * scale.x * mHDScaleRatio), autoScaler.toDevice((float)mTex.height * scale.y * mHDScaleRatio)));
+		Transform transform = mSpriteObject.transform;
+		transform.localPosition = new Vector3(0f - vector.x * mHotspot.x, 0f - vector.y * (1f - mHotspot.y), 0f);
+		transform.localScale = new Vector3(vector.x / (float)mTex.width, vector.y / (float)mTex.height, 1f);
 	}
 }

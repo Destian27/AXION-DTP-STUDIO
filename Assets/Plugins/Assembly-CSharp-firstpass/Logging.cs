@@ -951,7 +951,12 @@ public static class Logging
 
 		public static void RegisterLogCallback()
 		{
-			Application.RegisterLogCallback(LogCallback);
+			Application.logMessageReceived += LogCallback;
+		}
+
+		public static void UnregisterLogCallback()
+		{
+			Application.logMessageReceived -= LogCallback;
 		}
 
 		public static void Lock()
@@ -1298,7 +1303,7 @@ public static class Logging
 	{
 		if (g_registeredUnityLogCallback)
 		{
-			Application.RegisterLogCallback(null);
+			UnityLogLogger.UnregisterLogCallback();
 			g_registeredUnityLogCallback = false;
 		}
 		if (g_destructors != null)

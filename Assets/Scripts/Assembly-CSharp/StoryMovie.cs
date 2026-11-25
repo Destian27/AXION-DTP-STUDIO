@@ -24,7 +24,7 @@ public class StoryMovie : MonoBehaviour
 			NUF.AllowPortrait(true);
 			break;
 		case 21:
-			//Application.LoadLevel("MainMenu");
+			//UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
 			break;
 		}
 
@@ -35,7 +35,7 @@ public class StoryMovie : MonoBehaviour
         }
 		if (!videoPlayer.isPlaying || Input.GetMouseButton(0) || Input.GetKeyDown(KeyCode.Space))
 		{
-			Application.LoadLevel("MainMenu");
+			UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
 		}
     }
 

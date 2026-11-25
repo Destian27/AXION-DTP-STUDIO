@@ -54,7 +54,7 @@ public class GameCenterGUIManager : MonoBehaviour
 		}
 		if (GUI.Button(new Rect(left, num += num4, num2, num3), "Multiplayer Scene"))
 		{
-			Application.LoadLevel("GameCenterMultiplayerTestScene");
+			UnityEngine.SceneManagement.SceneManager.LoadScene("GameCenterMultiplayerTestScene");
 		}
 		left = (float)Screen.width - num2 - 5f;
 		num = 5f;

@@ -60,7 +60,7 @@ public class PrestitialScreenImpl : SceneBehaviour
 	{
 		yield return new WaitForSeconds(0.01f);
 		Debug.Log("PrestitialScreen: " + sceneName);
-		Application.LoadLevel(sceneName);
+		UnityEngine.SceneManagement.SceneManager.LoadScene(sceneName);
 	}
 
 	private void Update()
@@ -75,7 +75,7 @@ public class PrestitialScreenImpl : SceneBehaviour
 		mLayout.Update();
 		if (Input.GetKeyUp(KeyCode.Escape))
 		{
-			Application.LoadLevel("StoryMoviePre");
+			UnityEngine.SceneManagement.SceneManager.LoadScene("StoryMoviePre");
 		}
 	}
 }

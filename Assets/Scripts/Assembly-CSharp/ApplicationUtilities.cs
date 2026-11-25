@@ -399,7 +399,7 @@ public class ApplicationUtilities : MonoBehaviour
 		{
 			Singleton<Analytics>.instance.LogEvent("CoinsOnSuspend", Singleton<Profile>.instance.coins.ToString());
 			Singleton<Analytics>.instance.LogEvent("GemsOnSuspend", Singleton<Profile>.instance.gems.ToString());
-			Singleton<Analytics>.instance.LogEvent("CurrentLevelOnSuspend", Application.loadedLevelName);
+			Singleton<Analytics>.instance.LogEvent("CurrentLevelOnSuspend", UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
 			PushNotification(true);
 			Singleton<Analytics>.instance.EndSession();
 			bIsApplicationPaused = state;
@@ -422,9 +422,9 @@ public class ApplicationUtilities : MonoBehaviour
 		if (!string.IsNullOrEmpty(Singleton<Profile>.instance.latestDetectedOnlineVersion))
 		{
 			string[] version = Singleton<Profile>.instance.latestDetectedOnlineVersion.Split('.');
-			if (version.Length >= 3 && (Singleton<GameVersion>.instance.major < int.Parse(version[0]) || (Singleton<GameVersion>.instance.major == int.Parse(version[0]) && Singleton<GameVersion>.instance.minor < int.Parse(version[1])) || (Singleton<GameVersion>.instance.major == int.Parse(version[0]) && Singleton<GameVersion>.instance.minor == int.Parse(version[1]) && Singleton<GameVersion>.instance.revision < int.Parse(version[2]))) && Application.loadedLevelName != "MainMenu")
+			if (version.Length >= 3 && (Singleton<GameVersion>.instance.major < int.Parse(version[0]) || (Singleton<GameVersion>.instance.major == int.Parse(version[0]) && Singleton<GameVersion>.instance.minor < int.Parse(version[1])) || (Singleton<GameVersion>.instance.major == int.Parse(version[0]) && Singleton<GameVersion>.instance.minor == int.Parse(version[1]) && Singleton<GameVersion>.instance.revision < int.Parse(version[2]))) && UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != "MainMenu")
 			{
-				Application.LoadLevel("MainMenu");
+				UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
 			}
 		}
 	}
@@ -443,9 +443,9 @@ public class ApplicationUtilities : MonoBehaviour
 		TimeSpan timeSpan = now.Subtract(value);
 		if (timeSpan.Days == 1)
 		{
-			if (Application.loadedLevel != 0)
+			if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex != 0)
 			{
-				Application.LoadLevel("MainMenu");
+				UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
 			}
 		}
 		else if (timeSpan.Days > 1)
@@ -463,7 +463,7 @@ public class ApplicationUtilities : MonoBehaviour
 		mTimeTillCheckDailyRewardsAgain -= Time.deltaTime;
 		if (mTimeTillCheckDailyRewardsAgain <= 0f && WeakGlobalSceneBehavior<InGameImpl>.instance != null)
 		{
-			if (Application.loadedLevelName == "Store")
+			if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Store")
 			{
 				CheckForDailyReward();
 			}
@@ -491,7 +491,7 @@ public class ApplicationUtilities : MonoBehaviour
 
 	private void OnApplicationQuit()
 	{
-		Singleton<Analytics>.instance.LogEvent("CurrentLevelOnQuit", Application.loadedLevelName);
+		Singleton<Analytics>.instance.LogEvent("CurrentLevelOnQuit", UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
 		if (this.onApplicationQuit != null)
 		{
 			this.onApplicationQuit();

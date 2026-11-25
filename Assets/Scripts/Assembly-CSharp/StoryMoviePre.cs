@@ -9,7 +9,7 @@ public class StoryMoviePre : MonoBehaviour
 		mTicsCounter++;
 		if (mTicsCounter == 2)
 		{
-			Application.LoadLevel("StoryMovie");
+			UnityEngine.SceneManagement.SceneManager.LoadScene("StoryMovie");
 		}
 	}
 }

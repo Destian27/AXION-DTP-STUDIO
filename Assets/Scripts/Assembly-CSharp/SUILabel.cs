@@ -5,7 +5,11 @@ public class SUILabel : SUIWidget
 {
 	private const float kShadowPriorityOffset = -0.001f;
 
-	private GUIText mTextSprite;
+	private TextMesh mTextSprite;
+
+	private MeshRenderer mTextRenderer;
+
+	private Vector2 mPixelOffset = Vector2.zero;
 
 	private string mFontFile;
 
@@ -71,11 +75,11 @@ public class SUILabel : SUIWidget
 	{
 		get
 		{
-			return mTextSprite.material.color;
+			return mTextSprite.color;
 		}
 		set
 		{
-			mTextSprite.material.color = new Color(value.r, value.g, value.b, mTextSprite.material.color.a);
+			mTextSprite.color = new Color(value.r, value.g, value.b, mTextSprite.color.a);
 		}
 	}
 
@@ -171,13 +175,13 @@ public class SUILabel : SUIWidget
 	{
 		get
 		{
-			return mTextSprite.material.color.a;
+			return mTextSprite.color.a;
 		}
 		set
 		{
-			if (value != mTextSprite.material.color.a)
+			if (value != mTextSprite.color.a)
 			{
-				mTextSprite.material.color = new Color(mTextSprite.material.color.r, mTextSprite.material.color.g, mTextSprite.material.color.b, value);
+				mTextSprite.color = new Color(mTextSprite.color.r, mTextSprite.color.g, mTextSprite.color.b, value);
 				if (mShadow != null)
 				{
 					mShadow.alpha = value;
@@ -190,7 +194,7 @@ public class SUILabel : SUIWidget
 	{
 		get
 		{
-			return SUIUtils.unityToUser(mTextSprite.GetScreenRect());
+			return SUIUtils.unityToUser(getScreenRect());
 		}
 	}
 
@@ -286,7 +290,7 @@ public class SUILabel : SUIWidget
 	{
 		GUIStyle gUIStyle = new GUIStyle();
 		gUIStyle.font = mTextSprite.font;
-		gUIStyle.normal.textColor = mTextSprite.material.color;
+		gUIStyle.normal.textColor = mTextSprite.color;
 		Vector2 vector = gUIStyle.CalcSize(new GUIContent(mOriginalText));
 		Rect rect = new Rect(position.x, position.y, vector.x, vector.y);
 		switch (mTextSprite.anchor)
@@ -321,6 +325,16 @@ public class SUILabel : SUIWidget
 		GUI.color = color;
 	}
 
+	private Rect getScreenRect()
+	{
+		if (mTextRenderer == null)
+		{
+			return new Rect(0f, 0f, 0f, 0f);
+		}
+		Bounds bounds = mTextRenderer.bounds;
+		return new Rect(bounds.min.x, bounds.min.y, bounds.size.x, bounds.size.y);
+	}
+
 	private void initSprite(string fontFile)
 	{
 		mFontFile = fontFile;
@@ -328,14 +342,24 @@ public class SUILabel : SUIWidget
 		string prefab = Singleton<FontSetFinder>.instance.GetPrefab(fontFile);
 		if (prefab == string.Empty)
 		{
-			mTextSprite = (GUIText)mGameObject.AddComponent<GUIText>();
+			mTextSprite = mGameObject.AddComponent<TextMesh>();
 		}
 		else
 		{
 			Object.Destroy(mGameObject);
 			mGameObject = Object.Instantiate(Resources.Load(prefab)) as GameObject;
 			mGOTransformRef = mGameObject.transform;
-			mTextSprite = mGameObject.GetComponent<GUIText>();
+			mTextSprite = mGameObject.GetComponent<TextMesh>();
+			if (mTextSprite == null)
+			{
+				mTextSprite = mGameObject.AddComponent<TextMesh>();
+			}
+		}
+		mGameObject.layer = SUICamera.layer;
+		mTextRenderer = mGameObject.GetComponent<MeshRenderer>();
+		if (mTextRenderer == null)
+		{
+			mTextRenderer = mGameObject.AddComponent<MeshRenderer>();
 		}
 		string path = Singleton<FontSetFinder>.instance.basePath + fontFile;
 		Font font = null;
@@ -348,8 +372,17 @@ public class SUILabel : SUIWidget
 		{
 			Debug.Log("ERROR: Could not load font: " + fontFile);
 		}
-		mTextSprite.font = font;
-		mTextSprite.pixelOffset = new Vector2(0f, mTextSprite.font.lineHeight * 0.825f);
+		else
+		{
+			mTextSprite.font = font;
+			mTextRenderer.sharedMaterial = font.material;
+			mPixelOffset = new Vector2(0f, (float)font.lineHeight * 0.825f);
+		}
+		mTextSprite.fontSize = 0;
+		mTextSprite.characterSize = 10f;
+		mTextSprite.color = Color.white;
+		updateScale();
+		updatePosition();
 	}
 
 	private void refreshDisplay(bool forceRefresh)
@@ -360,7 +393,7 @@ public class SUILabel : SUIWidget
 		}
 		mTextSprite.text = mOriginalText;
 		mShownLines = 1;
-		if (mMaxWidth > 0 && mTextSprite.GetScreenRect().width > (float)adjustedMaxWidth)
+		if (mMaxWidth > 0 && getScreenRect().width > (float)adjustedMaxWidth)
 		{
 			string text = mOriginalText;
 			List<string> list = new List<string>();
@@ -391,7 +424,7 @@ public class SUILabel : SUIWidget
 		if (MultiLanguages.isAsian)
 		{
 			mTextSprite.text = source;
-			if (mTextSprite.GetScreenRect().width <= (float)adjustedMaxWidth)
+			if (getScreenRect().width <= (float)adjustedMaxWidth)
 			{
 				return source;
 			}
@@ -399,7 +432,7 @@ public class SUILabel : SUIWidget
 			{
 				text2 = source.Substring(0, i);
 				mTextSprite.text = text2;
-				if (mTextSprite.GetScreenRect().width > (float)adjustedMaxWidth)
+				if (getScreenRect().width > (float)adjustedMaxWidth)
 				{
 					return source.Substring(0, i - 1);
 				}
@@ -412,7 +445,7 @@ public class SUILabel : SUIWidget
 			{
 				text2 = text2 + list[j] + " ";
 				mTextSprite.text = text2;
-				if (mTextSprite.GetScreenRect().width > (float)adjustedMaxWidth)
+				if (getScreenRect().width > (float)adjustedMaxWidth)
 				{
 					if (text.Length > 0)
 					{
@@ -429,6 +462,14 @@ public class SUILabel : SUIWidget
 	protected override void updatePosition()
 	{
 		base.updatePosition();
+		if (mGOTransformRef != null)
+		{
+			mGOTransformRef.position += new Vector3(mPixelOffset.x, mPixelOffset.y, 0f);
+		}
+		if (mTextRenderer != null)
+		{
+			mTextRenderer.sortingOrder = sortingOrder;
+		}
 		if (mShadow != null)
 		{
 			mShadow.position = position + mShadowOffset;
@@ -438,9 +479,6 @@ public class SUILabel : SUIWidget
 
 	private void updateScale()
 	{
-		if (mFontScale != 1f)
-		{
-			mGameObject.transform.localScale = new Vector3(mFontScale * ((float)Screen.height / (float)Screen.width), mFontScale, 0f);
-		}
+		mGameObject.transform.localScale = new Vector3(mFontScale, mFontScale, 1f);
 	}
 }

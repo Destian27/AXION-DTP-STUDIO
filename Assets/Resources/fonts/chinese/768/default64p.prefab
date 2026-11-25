@@ -20,7 +20,8 @@ GameObject:
   m_PrefabInternal: {fileID: 100100000}
   m_Component:
   - 4: {fileID: 4952752591970190}
-  - 132: {fileID: 132528349909612141}
+  - 102: {fileID: 132528349909612141}
+  - 23: {fileID: 4775268907111830}
   - 114: {fileID: 114368581232835896}
   - 114: {fileID: 114716375652728567}
   m_Layer: 0
@@ -42,25 +43,43 @@ Transform:
   m_LocalEulerAnglesHint: {x: 0, y: -0, z: -0}
   m_Children: []
   m_Father: {fileID: 0}
---- !u!132 &132528349909612141
-GUIText:
-  serializedVersion: 3
+--- !u!102 &132528349909612141
+TextMesh:
+  m_ObjectHideFlags: 0
+  m_PrefabParentObject: {fileID: 0}
+  m_PrefabInternal: {fileID: 100100000}
+  m_GameObject: {fileID: 1903853050031298}
+  m_Text: 
+  m_OffsetZ: 0
+  m_CharacterSize: 10
+  m_LineSpacing: 1
+  m_Anchor: 1
+  m_Alignment: 1
+  m_TabSize: 4
+  m_FontSize: 0
+  m_FontStyle: 0
+  m_RichText: 1
+  m_Font: {fileID: 12800000, guid: f2ebb63bd8193264eaa6b82b116b29ef, type: 2}
+  m_Color:
+    serializedVersion: 2
+    rgba: 4294967295
+
+--- !u!23 &4775268907111830
+MeshRenderer:
   m_ObjectHideFlags: 0
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 100100000}
   m_GameObject: {fileID: 1903853050031298}
   m_Enabled: 1
-  m_Text: Samurai vs Zombies
-  m_Anchor: 1
-  m_Alignment: 1
-  m_PixelOffset: {x: 0, y: 0}
-  m_LineSpacing: 1
-  m_TabSize: 4
-  m_Font: {fileID: 12800000, guid: f2ebb63bd8193264eaa6b82b116b29ef, type: 2}
-  m_Material: {fileID: 0}
-  m_FontSize: 0
-  m_FontStyle: 0
-  m_PixelCorrect: 0
+  m_CastShadows: 0
+  m_ReceiveShadows: 0
+  m_Materials: []
+  m_SubsetIndices: 
+  m_StaticBatchRoot: {fileID: 0}
+  m_UseLightProbes: 0
+  m_ReflectionProbeUsage: 0
+  m_ProbeAnchor: {fileID: 0}
+
 --- !u!114 &114368581232835896
 MonoBehaviour:
   m_ObjectHideFlags: 0

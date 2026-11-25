@@ -49,7 +49,7 @@ public class IntroMovie : MonoBehaviour
 			break;
 		case 21:
 			Debug.Log("IntroMovie: main menu load");
-			//Application.LoadLevel("StoryMoviePre");
+			//UnityEngine.SceneManagement.SceneManager.LoadScene("StoryMoviePre");
 			break;
 		}
 
@@ -60,7 +60,7 @@ public class IntroMovie : MonoBehaviour
         }
         if (!videoPlayer.isPlaying || Input.GetMouseButton(0) || Input.GetKeyDown(KeyCode.Space))
 		{
-            Application.LoadLevel("StoryMoviePre");
+            UnityEngine.SceneManagement.SceneManager.LoadScene("StoryMoviePre");
         }
     }
 

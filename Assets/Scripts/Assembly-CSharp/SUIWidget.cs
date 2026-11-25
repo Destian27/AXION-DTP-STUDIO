@@ -68,13 +68,13 @@ public class SUIWidget : SUIProcess, IHasVisualAttributes
 	{
 		get
 		{
-			return mGameObject.active;
+			return mGameObject.activeSelf;
 		}
 		set
 		{
-			if (mGameObject.active != value)
+			if (mGameObject.activeSelf != value)
 			{
-				mGameObject.active = value;
+				mGameObject.SetActive(value);
 			}
 		}
 	}
@@ -100,8 +100,9 @@ public class SUIWidget : SUIProcess, IHasVisualAttributes
 
 	public SUIWidget()
 	{
+		SUICamera.Ensure();
 		mGameObject = new GameObject();
-		mGameObject.layer = LayerMask.NameToLayer("SamuraiUI");
+		mGameObject.layer = SUICamera.layer;
 		mGOTransformRef = mGameObject.transform;
 		mPosition = new Vector2(0.5f, 0.5f);
 		updatePosition();
@@ -125,6 +126,14 @@ public class SUIWidget : SUIProcess, IHasVisualAttributes
 	protected virtual void updatePosition()
 	{
 		Vector2 vector = SUIUtils.userToUnity(mPosition);
-		mGOTransformRef.position = new Vector3(vector.x, vector.y, mPriority);
+		mGOTransformRef.position = new Vector3(vector.x * (float)Screen.width, vector.y * (float)Screen.height, 0f);
+	}
+
+	protected int sortingOrder
+	{
+		get
+		{
+			return Mathf.Clamp(Mathf.RoundToInt(mPriority * 1000f), -32000, 32000);
+		}
 	}
 }

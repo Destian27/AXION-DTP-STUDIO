@@ -10,7 +10,7 @@ public class ChangeMaterial : MonoBehaviour
 		{
 			return;
 		}
-		ParticleRenderer component = GetComponent<ParticleRenderer>();
+		ParticleSystemRenderer component = GetComponent<ParticleSystemRenderer>();
 		if ((bool)component)
 		{
 			MultiLanguages.ESystemLanguage eSystemLanguage = MultiLanguages.ESystemLanguage.ESL_English;

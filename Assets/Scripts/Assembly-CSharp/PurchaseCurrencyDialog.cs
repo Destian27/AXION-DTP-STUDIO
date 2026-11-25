@@ -201,7 +201,7 @@ public class PurchaseCurrencyDialog : IDialog
 		((SUIButton)mLayout["back"]).onButtonPressed = Close;
 		((SUIButton)mLayout["free"]).onButtonPressed = OnFreeGemsButtonPressed;
 		instance = this;
-		if (Application.loadedLevelName == "Store" || Application.loadedLevelName == "Pachinko")
+		if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Store" || UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Pachinko")
 		{
 			Singleton<PlayHavenTowerControl>.instance.InvokeContent("bank_launch");
 		}

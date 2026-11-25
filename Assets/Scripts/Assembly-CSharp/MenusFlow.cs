@@ -34,6 +34,6 @@ public class MenusFlow : Singleton<MenusFlow>
 		{
 			SingletonMonoBehaviour<WaitingIconBetweenScenes>.instance.visible = true;
 		}
-		Application.LoadLevel(scene);
+		UnityEngine.SceneManagement.SceneManager.LoadScene(scene);
 	}
 }
