@@ -26,7 +26,7 @@ public class EffectKiller : MonoBehaviour
 	{
 		mParticleSystems = GetComponentsInChildren<ParticleSystem>();
 		mEmitters = GetComponentsInChildren<ParticleEmitter>();
-		mHadChildren = base.transform.GetChildCount() > 0;
+		mHadChildren = base.transform.childCount > 0;
 		mHadEffects = mParticleSystems.Length > 0 || mEmitters.Length > 0;
 	}
 
@@ -87,7 +87,7 @@ public class EffectKiller : MonoBehaviour
 				Cleanup();
 			}
 		}
-		if (mHadChildren && base.transform.GetChildCount() <= 0)
+		if (mHadChildren && base.transform.childCount <= 0)
 		{
 			Cleanup();
 		}

@@ -31,7 +31,7 @@ public class DesignerVariables : SingletonSpawningMonoBehaviour<DesignerVariable
 		mMapDebugVars = new Dictionary<string, Param>();
 		lstListeners = new List<GameObject>();
 		UnityEngine.Object.DontDestroyOnLoad(base.gameObject);
-		UnityEngine.Random.seed = DateTime.Now.Second;
+		UnityEngine.Random.InitState(DateTime.Now.Second);
 	}
 
 	public DesignerVariablesSchema GetVariableRecord(string strVariableName)

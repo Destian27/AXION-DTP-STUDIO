@@ -85,6 +85,7 @@ public static class CIBuild
         PlayerSettings.Android.targetSdkVersion = (AndroidSdkVersions)35;
         PlayerSettings.SetScriptingBackend(UnityEditor.Build.NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
         PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARMv7 | AndroidArchitecture.ARM64;
+        PlayerSettings.Android.forceInternetPermission = true; // wajib untuk MaintenanceGate / Supabase
         PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
         PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3 });
         PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, "com.dtp.samuraivszombie");

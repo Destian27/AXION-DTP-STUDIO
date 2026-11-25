@@ -102,9 +102,9 @@ public class GluiTextEdit : GluiText
 			keyboard.text = text;
 		}
 		SetText(keyboard.text);
-		if (keyboard.done || !keyboard.active)
+		if (keyboard.status == TouchScreenKeyboard.Status.Done || keyboard.status == TouchScreenKeyboard.Status.Canceled || !keyboard.active)
 		{
-			if (keyboard.wasCanceled)
+			if ((keyboard.status == TouchScreenKeyboard.Status.Canceled))
 			{
 				SetText(defaultText);
 			}

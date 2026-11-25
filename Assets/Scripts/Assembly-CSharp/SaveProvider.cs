@@ -346,10 +346,11 @@ public abstract class SaveProvider : IDisposable
 			byte[] array = memoryStream.ToArray();
 			crc.Reset();
 			crc.SlurpBlock(array, 0, array.Length);
-			uint num = (uint)(UnityEngine.Random.seed = crc.Crc32Result);
+			UnityEngine.Random.InitState(crc.Crc32Result);
+			uint num = (uint)crc.Crc32Result;
 			uint num2 = (uint)UnityEngine.Random.Range(0, int.MaxValue);
 			num ^= num2;
-			UnityEngine.Random.seed = (int)DateTime.Now.Ticks;
+			UnityEngine.Random.InitState((int)DateTime.Now.Ticks);
 			Header.CRC = num;
 			Array.Copy(Header.GetBytes(), array, Header.Length);
 			return array;
@@ -370,10 +371,11 @@ public abstract class SaveProvider : IDisposable
 		SaveHeader.RevertCRC(data);
 		crc.Reset();
 		crc.SlurpBlock(data, 0, data.Length);
-		uint num2 = (uint)(UnityEngine.Random.seed = crc.Crc32Result);
+		UnityEngine.Random.InitState(crc.Crc32Result);
+		uint num2 = (uint)crc.Crc32Result;
 		uint num3 = (uint)UnityEngine.Random.Range(0, int.MaxValue);
 		num2 ^= num3;
-		UnityEngine.Random.seed = (int)DateTime.Now.Ticks;
+		UnityEngine.Random.InitState((int)DateTime.Now.Ticks);
 		if (dataHeader.CRC != num2 && RequireCRCMatch)
 		{
 			return null;

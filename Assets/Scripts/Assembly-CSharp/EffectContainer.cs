@@ -331,7 +331,8 @@ public class EffectContainer : MonoBehaviour
 			{
 				ParticleSystem particleSystem = (ParticleSystem)array[i];
 				flag = true;
-				particleSystem.enableEmission = visibility;
+				ParticleSystem.EmissionModule emissionModule = particleSystem.emission;
+				emissionModule.enabled = visibility;
 			}
 			Component[] componentsInChildren2 = effect.transform.GetComponentsInChildren(typeof(ParticleEmitter));
 			Component[] array2 = componentsInChildren2;
