@@ -56,6 +56,9 @@ public static class CIBuild
         if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
             EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.Android, BuildTarget.Android);
 
+        // 2b) Pengaturan Android wajib: min Android 7.0 (API 24), target API 35, IL2CPP, ARMv7 + ARM64, GLES3.
+        ApplyAndroidSettings();
+
         // 3) Versi dari CI (opsional).
         string versionCode = GetArg("androidVersionCode");
         if (int.TryParse(versionCode, out int code) && code > 0)
@@ -93,6 +96,38 @@ public static class CIBuild
         BuildSummary summary = report.summary;
         Debug.Log($"[CIBuild] Hasil: {summary.result}, ukuran {summary.totalSize / (1024 * 1024)} MB, error {summary.totalErrors}");
         EditorApplication.Exit(summary.result == BuildResult.Succeeded ? 0 : 1);
+    }
+
+    private static void ApplyAndroidSettings()
+    {
+        PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel24;
+        PlayerSettings.Android.targetSdkVersion = (AndroidSdkVersions)35;
+        PlayerSettings.SetScriptingBackend(UnityEditor.Build.NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
+        PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARMv7 | AndroidArchitecture.ARM64;
+        PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
+        PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3 });
+        PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, "com.dtp.samuraivszombie");
+
+        // Tanda tangan tetap -> APK versi baru bisa menimpa versi lama tanpa "aplikasi tidak terinstal".
+        string ksPath = Environment.GetEnvironmentVariable("ANDROID_KEYSTORE_PATH");
+        if (string.IsNullOrEmpty(ksPath)) ksPath = "Keystore/dtp.keystore";
+        string ksPass = Environment.GetEnvironmentVariable("ANDROID_KEYSTORE_PASS");
+        if (string.IsNullOrEmpty(ksPass)) ksPass = "dtp123456";
+        string alias = Environment.GetEnvironmentVariable("ANDROID_KEYALIAS_NAME");
+        if (string.IsNullOrEmpty(alias)) alias = "dtpkey";
+        string aliasPass = Environment.GetEnvironmentVariable("ANDROID_KEYALIAS_PASS");
+        if (string.IsNullOrEmpty(aliasPass)) aliasPass = ksPass;
+
+        if (!File.Exists(ksPath))
+            throw new Exception("[CIBuild] Keystore tidak ditemukan: " + ksPath);
+
+        PlayerSettings.Android.useCustomKeystore = true;
+        PlayerSettings.Android.keystoreName = ksPath;
+        PlayerSettings.Android.keystorePass = ksPass;
+        PlayerSettings.Android.keyaliasName = alias;
+        PlayerSettings.Android.keyaliasPass = aliasPass;
+
+        Debug.Log("[CIBuild] Android: minSdk=24, targetSdk=35, IL2CPP, ARMv7+ARM64, GLES3, keystore=" + ksPath);
     }
 
     private static string GetArg(string name)
