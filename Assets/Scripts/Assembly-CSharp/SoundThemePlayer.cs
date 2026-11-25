@@ -1,8 +1,11 @@
+using System;
 using UnityEngine;
 
 [AddComponentMenu("Audio/Sound Theme Player")]
 public class SoundThemePlayer : MonoBehaviour
 {
+	public static GameObjectPool pool = new GameObjectPool();
+
 	public SoundTheme baseTheme;
 
 	public float defaultMinDistance = 1f;
@@ -37,31 +40,26 @@ public class SoundThemePlayer : MonoBehaviour
 
 	public AudioSource PlaySoundEvent(string theName)
 	{
-		if (!base.enabled)
-		{
-			return null;
-		}
 		SoundThemeEvent soundEvent = GetSoundEvent(theName);
 		if (soundEvent != null)
 		{
-			if (soundEvent.percentChanceNone > 0 && Random.Range(0, 100) < soundEvent.percentChanceNone)
+			if (soundEvent.percentChanceNone > 0 && UnityEngine.Random.Range(0, 100) < soundEvent.percentChanceNone)
 			{
 				return null;
 			}
 			if (soundEvent.clips == null || soundEvent.clips.Length == 0)
 			{
-				Debug.LogWarning("SoundEvent " + theName + " from " + base.name + " has no audio clips assigned!");
 				return null;
 			}
-			if (soundEvent.playLimit < 0 && soundEvent.playingClips != null && soundEvent.playingClips.Count >= -soundEvent.playLimit)
+			if (soundEvent.playLimit < 0 && soundEvent.playingClips != null && soundEvent.playingClips.Count != 0 && soundEvent.playingClips.Count >= -soundEvent.playLimit)
 			{
 				return null;
 			}
-			while (soundEvent.playLimit > 0 && soundEvent.playingClips != null && soundEvent.playingClips.Count >= soundEvent.playLimit)
+			while (soundEvent.playLimit > 0 && soundEvent.playingClips != null && soundEvent.playingClips.Count != 0 && soundEvent.playingClips.Count >= soundEvent.playLimit)
 			{
 				SoundThemeCustomEffect soundThemeCustomEffect = soundEvent.playingClips[0];
 				soundEvent.playingClips.Remove(soundThemeCustomEffect);
-				Object.Destroy(soundThemeCustomEffect.gameObject);
+				pool.Release(soundThemeCustomEffect.gameObject);
 			}
 			if (soundEvent.loop)
 			{
@@ -75,7 +73,7 @@ public class SoundThemePlayer : MonoBehaviour
 			if (soundEvent.clips.Length > 1 && soundEvent.lastClipPlayed >= 0 && soundEvent.lastClipPlayed < soundEvent.clips.Length)
 			{
 				num = -1;
-				for (int num2 = Random.Range(1, soundEvent.clips.Length); num2 > 0; num2--)
+				for (int num2 = UnityEngine.Random.Range(1, soundEvent.clips.Length); num2 > 0; num2--)
 				{
 					num++;
 					if (num == soundEvent.lastClipPlayed)
@@ -85,12 +83,12 @@ public class SoundThemePlayer : MonoBehaviour
 				}
 				if (num >= soundEvent.clips.Length)
 				{
-					num = Random.Range(0, soundEvent.clips.Length);
+					num = UnityEngine.Random.Range(0, soundEvent.clips.Length);
 				}
 			}
 			else
 			{
-				num = Random.Range(0, soundEvent.clips.Length);
+				num = UnityEngine.Random.Range(0, soundEvent.clips.Length);
 			}
 			soundEvent.lastClipPlayed = num;
 			AudioClip audioClip = soundEvent.clips[num];
@@ -113,24 +111,26 @@ public class SoundThemePlayer : MonoBehaviour
 				AudioSource audioSource;
 				if (soundThemeCustomEffect3 != null)
 				{
-					gameObject = Object.Instantiate(soundThemeCustomEffect3.gameObject) as GameObject;
-					gameObject.name = "SFX(" + theName + "-" + gameObject.name + ")";
+					gameObject = pool.Acquire(soundThemeCustomEffect3.gameObject);
 					audioSource = gameObject.GetComponent<AudioSource>();
 					gameObject.GetComponent<AudioSource>().clip = audioClip;
 					soundThemeCustomEffect3 = gameObject.GetComponent<SoundThemeCustomEffect>();
 				}
 				else
 				{
-					gameObject = new GameObject("SFX(" + theName + ")");
-					audioSource = gameObject.AddComponent<AudioSource>();
-					soundThemeCustomEffect3 = gameObject.AddComponent<SoundThemeCustomEffect>();
+					gameObject = pool.Acquire("SoundThemeCustomEffect", new Type[2]
+					{
+						typeof(AudioSource),
+						typeof(SoundThemeCustomEffect)
+					});
+					audioSource = gameObject.GetComponent<AudioSource>();
+					soundThemeCustomEffect3 = gameObject.GetComponent<SoundThemeCustomEffect>();
 					audioSource.clip = audioClip;
 					if (defaultMaxDistance > 0f && defaultMaxDistance > defaultMinDistance)
 					{
 						audioSource.minDistance = defaultMinDistance;
 						audioSource.maxDistance = defaultMaxDistance;
 					}
-					audioSource.rolloffMode = ((!soundEvent.useLogarithmicRolloff) ? AudioRolloffMode.Linear : AudioRolloffMode.Logarithmic);
 				}
 				if (soundEvent.loop)
 				{
@@ -140,17 +140,13 @@ public class SoundThemePlayer : MonoBehaviour
 				{
 					gameObject.transform.parent = base.transform;
 				}
-				else
-				{
-					Object.DontDestroyOnLoad(gameObject);
-				}
 				gameObject.transform.position = base.transform.position;
 				gameObject.transform.localPosition += positionOffset;
 				if (soundEvent.isVoice)
 				{
 					if (mCurrentVoiceClip != null)
 					{
-						Object.Destroy(mCurrentVoiceClip.gameObject);
+						pool.Release(mCurrentVoiceClip.gameObject);
 					}
 					mCurrentVoiceClip = soundThemeCustomEffect3;
 				}
@@ -218,5 +214,30 @@ public class SoundThemePlayer : MonoBehaviour
 			}
 		}
 		return null;
+	}
+
+	public static void PlayClipAtPoint(AudioClip aClip, Vector3 position, float volume)
+	{
+		if (aClip != null)
+		{
+			SoundThemeEvent soundThemeEvent = new SoundThemeEvent();
+			soundThemeEvent.clips = new AudioClip[1] { aClip };
+			soundThemeEvent.name = aClip.name;
+			soundThemeEvent.volume = volume;
+			SoundThemeCustomEffect soundThemeCustomEffect = SoundThemeManager.Instance.globalForcedOverrideCustomEffect;
+			if (soundThemeCustomEffect == null && SoundThemeManager.Instance.globalDefaultCustomEffect != null)
+			{
+				soundThemeCustomEffect = SoundThemeManager.Instance.globalDefaultCustomEffect;
+			}
+			GameObject gameObject = ((!(soundThemeCustomEffect != null)) ? pool.Acquire("SoundThemeCustomEffect", new Type[2]
+			{
+				typeof(AudioSource),
+				typeof(SoundThemeCustomEffect)
+			}) : pool.Acquire(soundThemeCustomEffect.gameObject));
+			soundThemeCustomEffect = gameObject.GetComponent<SoundThemeCustomEffect>();
+			gameObject.GetComponent<AudioSource>().clip = aClip;
+			gameObject.transform.position = position;
+			soundThemeCustomEffect.BeginPlayback(soundThemeEvent);
+		}
 	}
 }

@@ -2,7 +2,9 @@
 %TAG !u! tag:unity3d.com,2011:
 --- !u!159 &1
 EditorSettings:
+  serializedVersion: 2
   m_ObjectHideFlags: 0
-  m_ExternalVersionControlSupport: 1
+  m_ExternalVersionControlSupport: Visible Meta Files
+  m_SerializationMode: 2
   m_WebSecurityEmulationEnabled: 0
   m_WebSecurityEmulationHostUrl:

@@ -7,6 +7,7 @@ AnimationClip:
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
   m_Name: cast
+  m_AnimationType: 1
   m_Compressed: 0
   m_RotationCurves: []
   m_CompressedRotationCurves: []
@@ -56,6 +57,22 @@ AnimationClip:
   m_Bounds:
     m_Center: {x: 0, y: 0, z: 0}
     m_Extent: {x: 0, y: 0, z: 0}
+  m_MuscleClipInfo:
+    m_StartTime: 0
+    m_StopTime: 0
+    m_OrientationOffsetY: 0
+    m_Level: 0
+    m_CycleOffset: 0
+    m_LoopBlend: 0
+    m_LoopBlendOrientation: 0
+    m_LoopBlendPositionY: 0
+    m_LoopBlendPositionXZ: 0
+    m_KeepOriginalOrientation: 0
+    m_KeepOriginalPositionY: 0
+    m_KeepOriginalPositionXZ: 0
+    m_HeightFromFeet: 0
+    m_Mirror: 0
+    m_KeepAdditionalBonesAnimation: 0
   m_EditorCurves: []
   m_EulerEditorCurves: []
   m_Events:
@@ -67,7 +84,7 @@ AnimationClip:
     intParameter: 0
     messageOptions: 0
   - time: 0.73333335
-    functionName: PlaySoundEvent
+    functionName: PlaySoundEventThisAnimOnly
     data: Cast
     objectReferenceParameter: {fileID: 0}
     floatParameter: 0
@@ -75,8 +92,8 @@ AnimationClip:
     messageOptions: 0
   - time: 0.73333335
     functionName: SpawnEffectPrefab
-    data:
-    objectReferenceParameter: {fileID: 1480951076579022, guid: 0c2eb485d2ad03f4496dcdbf2b4804f2, type: 2}
+    data: body_effect
+    objectReferenceParameter: {fileID: 1833593775704057, guid: 564de5c2d1c15144c8f7e524978c0647, type: 2}
     floatParameter: 0
     intParameter: 0
     messageOptions: 0

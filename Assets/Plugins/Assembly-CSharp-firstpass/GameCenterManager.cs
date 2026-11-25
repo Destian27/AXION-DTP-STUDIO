@@ -1,49 +1,71 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 public class GameCenterManager : MonoBehaviour
 {
+	[method: MethodImpl(32)]
 	public static event Action<string> loadPlayerDataFailed;
 
+	[method: MethodImpl(32)]
 	public static event Action<List<GameCenterPlayer>> playerDataLoaded;
 
+	[method: MethodImpl(32)]
 	public static event Action playerAuthenticated;
 
+	[method: MethodImpl(32)]
 	public static event Action<string> playerFailedToAuthenticate;
 
+	[method: MethodImpl(32)]
 	public static event Action playerLoggedOut;
 
+	[method: MethodImpl(32)]
 	public static event Action<string> loadCategoryTitlesFailed;
 
+	[method: MethodImpl(32)]
 	public static event Action<List<GameCenterLeaderboard>> categoriesLoaded;
 
+	[method: MethodImpl(32)]
 	public static event Action<string> reportScoreFailed;
 
+	[method: MethodImpl(32)]
 	public static event Action<string> reportScoreFinished;
 
+	[method: MethodImpl(32)]
 	public static event Action<string> retrieveScoresFailed;
 
+	[method: MethodImpl(32)]
 	public static event Action<List<GameCenterScore>> scoresLoaded;
 
+	[method: MethodImpl(32)]
 	public static event Action<string> retrieveScoresForPlayerIdFailed;
 
+	[method: MethodImpl(32)]
 	public static event Action<List<GameCenterScore>> scoresForPlayerIdLoaded;
 
+	[method: MethodImpl(32)]
 	public static event Action<string> reportAchievementFailed;
 
+	[method: MethodImpl(32)]
 	public static event Action<string> reportAchievementFinished;
 
+	[method: MethodImpl(32)]
 	public static event Action<string> loadAchievementsFailed;
 
+	[method: MethodImpl(32)]
 	public static event Action<List<GameCenterAchievement>> achievementsLoaded;
 
+	[method: MethodImpl(32)]
 	public static event Action<string> resetAchievementsFailed;
 
+	[method: MethodImpl(32)]
 	public static event Action resetAchievementsFinished;
 
+	[method: MethodImpl(32)]
 	public static event Action<string> retrieveAchievementMetadataFailed;
 
+	[method: MethodImpl(32)]
 	public static event Action<List<GameCenterAchievementMetadata>> achievementMetadataLoaded;
 
 	private void Awake()

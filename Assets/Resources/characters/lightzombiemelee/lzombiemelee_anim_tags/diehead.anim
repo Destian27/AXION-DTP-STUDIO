@@ -7,6 +7,7 @@ AnimationClip:
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
   m_Name: diehead
+  m_AnimationType: 1
   m_Compressed: 0
   m_RotationCurves: []
   m_CompressedRotationCurves: []
@@ -37,6 +38,22 @@ AnimationClip:
   m_Bounds:
     m_Center: {x: 0, y: 0, z: 0}
     m_Extent: {x: 0, y: 0, z: 0}
+  m_MuscleClipInfo:
+    m_StartTime: 0
+    m_StopTime: 0
+    m_OrientationOffsetY: 0
+    m_Level: 0
+    m_CycleOffset: 0
+    m_LoopBlend: 0
+    m_LoopBlendOrientation: 0
+    m_LoopBlendPositionY: 0
+    m_LoopBlendPositionXZ: 0
+    m_KeepOriginalOrientation: 0
+    m_KeepOriginalPositionY: 0
+    m_KeepOriginalPositionXZ: 0
+    m_HeightFromFeet: 0
+    m_Mirror: 0
+    m_KeepAdditionalBonesAnimation: 0
   m_EditorCurves: []
   m_EulerEditorCurves: []
   m_Events:
@@ -44,27 +61,6 @@ AnimationClip:
     functionName: OnAnimStart
     data:
     objectReferenceParameter: {fileID: 0}
-    floatParameter: 0
-    intParameter: 0
-    messageOptions: 0
-  - time: 0
-    functionName: HideBodyPart
-    data: head_effect
-    objectReferenceParameter: {fileID: 0}
-    floatParameter: 0
-    intParameter: 0
-    messageOptions: 0
-  - time: 0
-    functionName: AttachEffectPrefabToJoint
-    data:
-    objectReferenceParameter: {fileID: 1319443560048317, guid: 15917cd5a442e5b48b87872245ee84b1, type: 2}
-    floatParameter: 0
-    intParameter: 0
-    messageOptions: 0
-  - time: 0
-    functionName: SpawnEffectPrefab
-    data:
-    objectReferenceParameter: {fileID: 1969133902749883, guid: c9c93b715c407e74d9605e0375c70c90, type: 2}
     floatParameter: 0
     intParameter: 0
     messageOptions: 0

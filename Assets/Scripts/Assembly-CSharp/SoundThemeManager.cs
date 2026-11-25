@@ -15,7 +15,7 @@ public class SoundThemeManager : MonoBehaviour
 	{
 		get
 		{
-			if (instance == null)
+			if (instance == null && !ApplicationUtilities.HasShutdown)
 			{
 				GameObject gameObject = new GameObject();
 				instance = gameObject.AddComponent<SoundThemeManager>();
@@ -30,10 +30,18 @@ public class SoundThemeManager : MonoBehaviour
 	{
 		if ((bool)instance)
 		{
-			Object.Destroy(instance);
+			Object.DestroyImmediate(instance);
 		}
 		instance = this;
 		Object.DontDestroyOnLoad(base.gameObject);
+	}
+
+	private void OnDestroy()
+	{
+		if (instance == this)
+		{
+			instance = null;
+		}
 	}
 
 	public static void SetAllLoopingSoundsPaused(bool shouldBePaused)
@@ -43,7 +51,7 @@ public class SoundThemeManager : MonoBehaviour
 		foreach (Object @object in array2)
 		{
 			SoundThemeCustomEffect soundThemeCustomEffect = (SoundThemeCustomEffect)@object;
-			if (soundThemeCustomEffect != null && soundThemeCustomEffect.sfxEvent != null && soundThemeCustomEffect.sfxEvent.loop && soundThemeCustomEffect.isPlaying)
+			if (soundThemeCustomEffect.sfxEvent.loop && soundThemeCustomEffect.isPlaying)
 			{
 				soundThemeCustomEffect.paused = shouldBePaused;
 			}

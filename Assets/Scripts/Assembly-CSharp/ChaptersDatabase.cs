@@ -2,7 +2,7 @@ using System.Collections.Generic;
 
 public class ChaptersDatabase : Singleton<ChaptersDatabase>
 {
-	private SDFTreeNode mChapters;
+	private TextDBSchema[] mChapters;
 
 	private string[] mCachedChaptersIDs;
 
@@ -19,7 +19,6 @@ public class ChaptersDatabase : Singleton<ChaptersDatabase>
 	public ChaptersDatabase()
 	{
 		Init();
-		SingletonMonoBehaviour<ResourcesManager>.instance.onInvalidateCache += ResetCachedData;
 	}
 
 	public void ResetCachedData()
@@ -29,12 +28,8 @@ public class ChaptersDatabase : Singleton<ChaptersDatabase>
 
 	public string GetAttribute(string chapterID, string attribute)
 	{
-		SDFTreeNode sDFTreeNode = mChapters.to(chapterID);
-		if (sDFTreeNode == null)
-		{
-			return string.Empty;
-		}
-		return sDFTreeNode[attribute];
+		string key = TextDBSchema.ChildKey(chapterID, attribute);
+		return mChapters.GetString(key);
 	}
 
 	public int[] GetWavesRange(string chapterID)
@@ -51,14 +46,14 @@ public class ChaptersDatabase : Singleton<ChaptersDatabase>
 	private void Init()
 	{
 		mCachedWaveRanges = new Dictionary<string, int[]>();
-		mChapters = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Chapters");
-		SDFTreeNode sDFTreeNode = mChapters.to("all");
-		mCachedChaptersIDs = new string[sDFTreeNode.attributeCount];
-		for (int i = 0; i < sDFTreeNode.attributeCount; i++)
+		if (DataBundleRuntime.Instance != null && DataBundleRuntime.Instance.Initialized)
 		{
-			if (sDFTreeNode.hasAttribute(i))
+			mChapters = DataBundleUtils.InitializeRecords<TextDBSchema>("Chapters");
+			int num = DynamicEnum.Count("Chapters");
+			mCachedChaptersIDs = new string[num];
+			for (int i = 0; i < num; i++)
 			{
-				mCachedChaptersIDs[i] = sDFTreeNode[i];
+				mCachedChaptersIDs[i] = mChapters.GetString(TextDBSchema.LevelKey("all", i));
 			}
 		}
 	}
@@ -66,20 +61,17 @@ public class ChaptersDatabase : Singleton<ChaptersDatabase>
 	private int[] GetWaveRange(string chapterID)
 	{
 		int[] array = new int[2];
-		SDFTreeNode sDFTreeNode = mChapters.to(chapterID);
-		if (sDFTreeNode != null)
+		string key = TextDBSchema.ChildKey(chapterID, "wavesRange");
+		string[] array2 = mChapters.GetString(key).Split(',');
+		if (array2.Length == 2)
 		{
-			string[] array2 = sDFTreeNode["wavesRange"].Split(',');
-			if (array2.Length == 2)
+			for (int i = 0; i < 2; i++)
 			{
-				for (int i = 0; i < 2; i++)
+				if (!int.TryParse(array2[i], out array[i]))
 				{
-					if (!int.TryParse(array2[i], out array[i]))
-					{
-						array[0] = 0;
-						array[1] = 0;
-						break;
-					}
+					array[0] = 0;
+					array[1] = 0;
+					break;
 				}
 			}
 		}

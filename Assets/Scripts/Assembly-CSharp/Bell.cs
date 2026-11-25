@@ -3,9 +3,13 @@ using UnityEngine;
 
 public class Bell
 {
+	private DataBundleRecordHandle<CharacterSchema> resourceHandle;
+
 	private GameObject mBellRinger;
 
 	private CharacterModelController mBellRingerController;
+
+	private GameObject mBell;
 
 	private int mBellLevel;
 
@@ -15,26 +19,36 @@ public class Bell
 
 	private float mAttackFrequency = 5f;
 
+	private string mBellResourcePath;
+
 	private float mTimerSinceBeginSwing;
 
 	private bool mAgainstPlayer;
 
-	public Bell(GameObject bellRingerObject)
+	private int OwnerId
 	{
-		switch (Singleton<PlayModesManager>.instance.selectedMode)
+		get
 		{
-		case "classic":
-			mBellLevel = Singleton<Profile>.instance.bellLevel;
-			break;
-		case "zombies":
-			mBellLevel = WeakGlobalInstance<WaveManager>.instance.bellLevel;
-			mAgainstPlayer = true;
-			break;
+			return mAgainstPlayer ? 1 : 0;
 		}
-		mBellRinger = bellRingerObject;
-		if (mBellRinger == null)
+	}
+
+	public Bell(GameObject bellRingerTransform, GameObject bellLocationObject, int owner)
+	{
+		if (owner == 0)
 		{
-			Debug.Log("ERROR: missing Bell ringer reference.");
+			mBellLevel = Singleton<Profile>.Instance.bellLevel;
+		}
+		else
+		{
+			mBellLevel = Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.bellLevel;
+		}
+		if (owner != 0)
+		{
+			mAgainstPlayer = true;
+		}
+		if (bellRingerTransform == null)
+		{
 			mBellLevel = 0;
 		}
 		if (mBellLevel == 0)
@@ -45,60 +59,95 @@ public class Bell
 			}
 			return;
 		}
+		Transform transform = bellLocationObject.transform;
+		Vector3 position = transform.position;
+		GetBellStats(position);
+		SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource(mBellResourcePath, 1);
+		GameObject objPrefab = cachedResource.Resource as GameObject;
+		mBell = GameObjectPool.DefaultObjectPool.Acquire(objPrefab, position, transform.rotation);
+		mBell.transform.parent = transform;
+		mBell.transform.localPosition = Vector3.zero;
+		InitializeModel("Bellringer");
+		mBellRinger.transform.parent = bellRingerTransform.transform;
+		mBellRinger.transform.localPosition = Vector3.zero;
 		mBellRingerController = mBellRinger.GetComponent<CharacterModelController>();
 		if (mBellRingerController == null)
 		{
 			mBellRingerController = mBellRinger.AddComponent<CharacterModelController>();
 		}
-		GetBellStats();
+		mBellRingerController.Idle();
+	}
+
+	private void InitializeModel(string characterRecordName)
+	{
+		resourceHandle = new DataBundleRecordHandle<CharacterSchema>("Character", characterRecordName);
+		resourceHandle.Load(DataBundleResourceGroup.InGame, true, delegate(CharacterSchema schema)
+		{
+			schema.Initialize("Character");
+			mBellRinger = CharacterSchema.Deserialize(schema);
+		});
 	}
 
 	public void Update()
 	{
-		if (mBellLevel == 0)
+		if (mBellRinger == null || mBellLevel == 0)
 		{
 			return;
 		}
-		if (WeakGlobalSceneBehavior<InGameImpl>.instance.playerWon && mBellRingerController.isEffectivelyIdle)
+		if (WeakGlobalMonoBehavior<InGameImpl>.Instance.gameOver)
 		{
-			mBellRingerController.PlayVictoryAnim();
-			return;
+			if (WeakGlobalMonoBehavior<InGameImpl>.Instance.playerWon != Singleton<PlayModesManager>.Instance.Attacking)
+			{
+				mBellRingerController.PlayVictoryAnim();
+				return;
+			}
+			if (Singleton<Profile>.Instance.inVSMultiplayerWave)
+			{
+				mBellRingerController.Die();
+				return;
+			}
 		}
 		mTimerSinceBeginSwing += Time.deltaTime;
-		if (!(mTimerSinceBeginSwing < mAttackFrequency) && mBellRingerController.isEffectivelyIdle && WeakGlobalInstance<CharactersManager>.instance.IsCharacterInRange(mRange, !mAgainstPlayer, false, true, false, true))
+		if (!(mTimerSinceBeginSwing < mAttackFrequency) && mBellRingerController.isEffectivelyIdle && WeakGlobalInstance<CharactersManager>.Instance.IsCharacterInRange(mRange, 1 - OwnerId, false, true, false, true, false))
 		{
 			PlayRingerSwing();
 		}
 	}
 
-	private void GetBellStats()
+	public void UnloadData()
 	{
-		SDFTreeNode sDFTreeNode = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Bell");
-		SDFTreeNode sDFTreeNode2 = sDFTreeNode.to(string.Format("{0:000}", mBellLevel));
-		if (sDFTreeNode2 == null)
+		if (resourceHandle != null)
 		{
-			Debug.Log("ERROR: Unable to find proper bell stats for level " + mBellLevel);
-			return;
+			resourceHandle.Unload();
 		}
-		float num = float.Parse(sDFTreeNode2["radius"]);
-		mDamage = float.Parse(sDFTreeNode2["damage"]);
-		mAttackFrequency = float.Parse(sDFTreeNode["attackFrequency"]);
-		float z = mBellRinger.transform.position.z;
-		mRange = new GameRange(z - num, z + num);
+	}
+
+	private void GetBellStats(Vector3 bellLoc)
+	{
+		TextDBSchema[] data = DataBundleUtils.InitializeRecords<TextDBSchema>("Bell");
+		float @float = data.GetFloat(TextDBSchema.LevelKey("range", mBellLevel));
+		mDamage = data.GetFloat(TextDBSchema.LevelKey("damage", mBellLevel));
+		mAttackFrequency = data.GetFloat("attackFrequency");
+		float z = bellLoc.z;
+		mRange = new GameRange(z - @float, z + @float);
+		string key = TextDBSchema.LevelKey("Prefab", mBellLevel);
+		mBellResourcePath = data.GetString(key);
 	}
 
 	private void PlayRingerSwing()
 	{
 		mBellRingerController.PerformSpecialAction("ring", OnBellDamage, mAttackFrequency);
+		mBell.GetComponent<Animation>().Play("ring");
 		mTimerSinceBeginSwing = 0f;
 	}
 
 	private void OnBellDamage()
 	{
-		List<Character> charactersInRange = WeakGlobalInstance<CharactersManager>.instance.GetCharactersInRange(mRange, !mAgainstPlayer);
+		List<Character> charactersInRange = WeakGlobalInstance<CharactersManager>.Instance.GetCharactersInRange(mRange, 1 - OwnerId);
 		foreach (Character item in charactersInRange)
 		{
-			item.RecievedAttack(EAttackType.Sonic, mDamage);
+			item.controller.stunnedTimer = 2f;
+			item.RecievedAttack(EAttackType.Sonic, mDamage, WeakGlobalMonoBehavior<InGameImpl>.Instance.GetHero(OwnerId));
 		}
 	}
 }

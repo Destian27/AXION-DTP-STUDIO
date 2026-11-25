@@ -8,5 +8,9 @@ public class WaveSpoils
 
 	public int balls;
 
+	public int souls;
+
+	public int leadership;
+
 	public List<CollectedPresent> presents = new List<CollectedPresent>();
 }

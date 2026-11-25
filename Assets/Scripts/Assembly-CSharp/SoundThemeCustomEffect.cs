@@ -26,6 +26,8 @@ public class SoundThemeCustomEffect : MonoBehaviour
 	[NonSerialized]
 	private bool mPaused;
 
+	private float? initialVolume;
+
 	public SoundThemeEvent sfxEvent
 	{
 		get
@@ -72,7 +74,7 @@ public class SoundThemeCustomEffect : MonoBehaviour
 		}
 		if (!mAudioSource.isPlaying)
 		{
-			UnityEngine.Object.Destroy(base.gameObject);
+			Kill();
 			return;
 		}
 		if (mVolumeFadeIncrement != 0f)
@@ -86,7 +88,7 @@ public class SoundThemeCustomEffect : MonoBehaviour
 			else if (mVolumeFadePercent <= 0f && mVolumeFadeIncrement < 0f)
 			{
 				mAudioSource.volume = 0f;
-				UnityEngine.Object.Destroy(base.gameObject);
+				Kill();
 				return;
 			}
 		}
@@ -96,14 +98,6 @@ public class SoundThemeCustomEffect : MonoBehaviour
 			Stop();
 		}
 		UpdateVolume();
-	}
-
-	public void OnDestroy()
-	{
-		if (mEventData != null && mEventData.playingClips != null)
-		{
-			mEventData.playingClips.Remove(this);
-		}
 	}
 
 	public void BeginPlayback(SoundThemeEvent eventData)
@@ -119,8 +113,17 @@ public class SoundThemeCustomEffect : MonoBehaviour
 			{
 				mEventData.playingClips.Add(this);
 			}
+			if (!initialVolume.HasValue)
+			{
+				initialVolume = mAudioSource.volume;
+			}
+			else
+			{
+				mAudioSource.volume = initialVolume.Value;
+			}
 			volume = mAudioSource.volume * mEventData.volume;
 			mAudioSource.pitch += UnityEngine.Random.Range(0f - mEventData.pitchVariance, mEventData.pitchVariance);
+			mAudioSource.rolloffMode = ((!eventData.useLogarithmicRolloff) ? AudioRolloffMode.Linear : AudioRolloffMode.Logarithmic);
 			if (mEventData.loop)
 			{
 				mAudioSource.loop = true;
@@ -167,7 +170,7 @@ public class SoundThemeCustomEffect : MonoBehaviour
 		if (mPaused)
 		{
 			mPaused = false;
-			UnityEngine.Object.Destroy(base.gameObject);
+			Kill();
 		}
 		else if (!(mVolumeFadeIncrement < 0f))
 		{
@@ -193,5 +196,18 @@ public class SoundThemeCustomEffect : MonoBehaviour
 	private void UpdateVolume()
 	{
 		mAudioSource.volume = Mathf.Clamp(volume * SoundThemeManager.Instance.globalVolume * mVolumeFadePercent, 0f, 1f);
+	}
+
+	private void Kill()
+	{
+		if (mAudioSource != null)
+		{
+			mAudioSource.Stop();
+		}
+		if (mEventData != null && mEventData.playingClips != null)
+		{
+			mEventData.playingClips.Remove(this);
+		}
+		SoundThemePlayer.pool.Release(base.gameObject);
 	}
 }

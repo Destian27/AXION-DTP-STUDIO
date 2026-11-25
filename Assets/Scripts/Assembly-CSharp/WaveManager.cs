@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 public class WaveManager : WeakGlobalInstance<WaveManager>
@@ -14,6 +15,14 @@ public class WaveManager : WeakGlobalInstance<WaveManager>
 		Unknown = 5
 	}
 
+	public enum WaveType
+	{
+		Wave_SinglePlayer = 0,
+		Wave_Bonus = 1,
+		Wave_Multiplayer = 2,
+		Wave_DailyChallenge = 3
+	}
+
 	public class WaveRecyclingMultipliers
 	{
 		public float enemiesHealth = 1f;
@@ -23,29 +32,31 @@ public class WaveManager : WeakGlobalInstance<WaveManager>
 		public float drops = 1f;
 	}
 
+	public delegate void OnLegionCallback();
+
 	private const float kSpawnDelayTimerMin = 1f;
 
 	private const float kSpawnDelayTimerMax = 4f;
 
 	private const int kEnemiesMax = 10;
 
+	private string specialBossName = string.Empty;
+
 	private int mWaveIndex;
+
+	private WaveType mWaveType;
 
 	private BoxCollider mEnemiesSpawnArea;
 
 	private float mZTarget;
 
-	private SDFTreeNode waveRootData;
+	private WaveSchema waveRootData;
 
-	private SDFTreeNode waveCommands;
+	private Dictionary<string, CharacterData> mCharacterDataPool = new Dictionary<string, CharacterData>();
 
-	private SDFTreeNode enemiesData;
+	private DataBundleTableHandle<HelperEnemySwapSchema> mCorruptionSwapData;
 
-	private SDFTreeNode rewards;
-
-	private GameObject mSpawnEffect;
-
-	private GameObject mAltSpawnEffect;
+	private DataBundleTableHandle<EnemySwapSchema> mDeathSwapData;
 
 	private WaveRecyclingMultipliers mLevelMultipliers = new WaveRecyclingMultipliers();
 
@@ -75,9 +86,19 @@ public class WaveManager : WeakGlobalInstance<WaveManager>
 	{
 		get
 		{
-			return mNextCommandToRun >= waveCommands.attributeCount;
+			return mNextCommandToRun >= waveRootData.Commands.Length && specialBossName == string.Empty;
 		}
 	}
+
+	public WaveSchema Data
+	{
+		get
+		{
+			return waveRootData;
+		}
+	}
+
+	public DataBundleRecordKey WaveRecordKey { get; private set; }
 
 	public int totalEnemies
 	{
@@ -175,11 +196,26 @@ public class WaveManager : WeakGlobalInstance<WaveManager>
 		}
 	}
 
-	public event OnSUIGenericCallback onLegionStart;
+	public HelperEnemySwapSchema[] helperEnemySwaps
+	{
+		get
+		{
+			return mCorruptionSwapData.Data;
+		}
+		set
+		{
+		}
+	}
 
-	public WaveManager(int waveIndex, BoxCollider enemiesSpawnArea, float zTarget)
+	private GameObject corruptionSpawnEffect { get; set; }
+
+	[method: MethodImpl(32)]
+	public event OnLegionCallback onLegionStart;
+
+	public WaveManager(WaveType waveType, int waveIndex, BoxCollider enemiesSpawnArea, float zTarget)
 	{
 		SetUniqueInstance(this);
+		mWaveType = waveType;
 		mWaveIndex = waveIndex;
 		mEnemiesSpawnArea = enemiesSpawnArea;
 		mZTarget = zTarget;
@@ -187,8 +223,38 @@ public class WaveManager : WeakGlobalInstance<WaveManager>
 		AnalyseWaveCommandsForStats();
 		mNextCommandToRun = 0;
 		mEnemiesKilledSoFar = 0;
-		mSpawnEffect = Resources.Load("FX/TeleportEnemy") as GameObject;
-		mAltSpawnEffect = Resources.Load("FX/Divine") as GameObject;
+		if (Singleton<Profile>.Instance.MultiplayerData.IsMultiplayerGameSessionActive())
+		{
+			int level = Singleton<Profile>.Instance.MultiplayerData.MultiplayerGameSessionData.defensiveBuffs[0];
+			string text = SpecialBossName(level);
+			if (text != string.Empty)
+			{
+				Singleton<EnemiesDatabase>.Instance.LoadInGameData(text);
+				allDifferentEnemies.Add(text);
+			}
+		}
+		if (helperEnemySwaps.Length > 0)
+		{
+			corruptionSpawnEffect = ResourceCache.GetCachedResource("FX/Corrupt", 1).Resource as GameObject;
+		}
+	}
+
+	public static string SpecialBossName(int level)
+	{
+		string result = string.Empty;
+		switch (level)
+		{
+		case 1:
+			result = "oni";
+			break;
+		case 2:
+			result = "jurogumo";
+			break;
+		case 3:
+			result = "Shogun_SvZ2";
+			break;
+		}
+		return result;
 	}
 
 	public void Update()
@@ -196,209 +262,223 @@ public class WaveManager : WeakGlobalInstance<WaveManager>
 		UpdateDelayTimer();
 	}
 
-	public static void LoadNextWaveLevel()
-	{
-		Singleton<Profile>.instance.ClearBonusWaveData();
-		if (Singleton<Profile>.instance.readyToStartBonusWave)
-		{
-			SDFTreeNode waveData = GetWaveData(Singleton<Profile>.instance.bonusWaveToBeat, true);
-			Singleton<Profile>.instance.LoadBonusWaveData(waveData);
-			Singleton<MenusFlow>.instance.LoadScene(waveData["scene"]);
-			SingletonMonoBehaviour<WaitingIconBetweenScenes>.instance.visible = true;
-		}
-		else
-		{
-			SDFTreeNode waveData2 = GetWaveData(Singleton<Profile>.instance.waveToBeat);
-			Singleton<MenusFlow>.instance.LoadScene(waveData2["scene"]);
-			SingletonMonoBehaviour<WaitingIconBetweenScenes>.instance.visible = true;
-		}
-	}
-
 	public void registerEnemyKilled(string enemyID)
 	{
 		mEnemiesKilledSoFar++;
-		Singleton<Profile>.instance.IncNumKillsOfEnemyType(enemyID);
-	}
-
-	public static string GetNextWaveNumberDisplay()
-	{
-		int waveToBeat = Singleton<Profile>.instance.waveToBeat;
-		return GetWaveNumberDisplay(waveToBeat, Singleton<Profile>.instance.GetWaveLevel(waveToBeat));
-	}
-
-	public static string GetWaveNumberDisplay(int waveNum, int waveLevel)
-	{
-		if (waveLevel <= 1)
-		{
-			return waveNum.ToString();
-		}
-		return string.Format("{0}-{1}", waveNum.ToString(), waveLevel.ToString());
-	}
-
-	public void PreloadEnemies()
-	{
-		foreach (string mAllDifferentEnemy in mAllDifferentEnemies)
-		{
-			SDFTreeNode sDFTreeNode = enemiesData.to(mAllDifferentEnemy);
-			WeakGlobalInstance<PrefabPreloader>.instance.Preload(sDFTreeNode["prefab"]);
-		}
-	}
-
-	public SDFTreeNode GetEnemyData(string id)
-	{
-		return enemiesData.to(id);
+		Singleton<Profile>.Instance.IncNumKillsOfEnemyType(enemyID);
 	}
 
 	public void AddSpecialRewardsToCollectables()
 	{
-		if (rewards == null || rewards.attributeCount == 0 || Singleton<Profile>.instance.GetWaveLevel(mWaveIndex) != 1)
+		if (waveRootData.Rewards != null && Singleton<Profile>.Instance.GetWaveLevel(mWaveIndex) == 1)
+		{
+			WeakGlobalInstance<CollectableManager>.Instance.GiveResource(ECollectableType.coin, waveRootData.Rewards.coins);
+			WeakGlobalInstance<CollectableManager>.Instance.GiveResource(ECollectableType.gem, waveRootData.Rewards.gems);
+			WeakGlobalInstance<CollectableManager>.Instance.GiveResource(ECollectableType.pachinkoball, waveRootData.Rewards.pachinkoBalls);
+			WeakGlobalInstance<CollectableManager>.Instance.GiveResource(ECollectableType.soul, waveRootData.Rewards.souls);
+			WeakGlobalInstance<CollectableManager>.Instance.GiveSpecificPresent("revivePotion", waveRootData.Rewards.revive);
+			WeakGlobalInstance<CollectableManager>.Instance.GiveSpecificPresent("power", waveRootData.Rewards.power);
+			WeakGlobalInstance<CollectableManager>.Instance.GiveSpecificPresent("luck", waveRootData.Rewards.luck);
+			WeakGlobalInstance<CollectableManager>.Instance.GiveSpecificPresent("friendship", waveRootData.Rewards.friendship);
+			WeakGlobalInstance<CollectableManager>.Instance.GiveSpecificPresent("wealth", waveRootData.Rewards.wealth);
+			WeakGlobalInstance<CollectableManager>.Instance.GiveSpecificPresent("haste", waveRootData.Rewards.haste);
+			WeakGlobalInstance<CollectableManager>.Instance.GiveSpecificPresent("peace", waveRootData.Rewards.peace);
+			WeakGlobalInstance<CollectableManager>.Instance.GiveSpecificPresent("healthPotion", waveRootData.Rewards.sushi);
+			WeakGlobalInstance<CollectableManager>.Instance.GiveSpecificPresent("leadershipPotion", waveRootData.Rewards.tea);
+		}
+	}
+
+	public static void LoadSceneForWave()
+	{
+		Singleton<Profile>.Instance.ClearBonusWaveData();
+		WaveSchema waveData = GetWaveData(Singleton<Profile>.Instance.waveToPlay, Singleton<Profile>.Instance.waveTypeToPlay);
+		LoadingScreen.LoadLevel(waveData.scene);
+	}
+
+	public WaveSchema GetWaveData()
+	{
+		return GetWaveData(mWaveIndex, mWaveType);
+	}
+
+	public static WaveSchema GetWaveData(DataBundleRecordKey recordKey, SeededRandomizer randomizer)
+	{
+		return WaveSchema.Initialize(recordKey, randomizer);
+	}
+
+	public static WaveSchema GetWaveData(int waveID, WaveType waveType)
+	{
+		switch (waveType)
+		{
+		case WaveType.Wave_Multiplayer:
+		{
+			string recordTable = Singleton<PlayModesManager>.Instance.selectedModeData.waves.RecordTable;
+			WaveSchema waveSchema2 = WaveSchema.Initialize(DataBundleRuntime.TableRecordKey(recordTable, waveID.ToString()));
+			if (waveSchema2 == null)
+			{
+			}
+			return waveSchema2;
+		}
+		case WaveType.Wave_DailyChallenge:
+		{
+			ProceduralWaveSchema dailyChallengeProceduralWaveSchema = Singleton<Profile>.Instance.dailyChallengeProceduralWaveSchema;
+			WaveSchema cachedWaveSchema = dailyChallengeProceduralWaveSchema.CachedWaveSchema;
+			if (cachedWaveSchema == null)
+			{
+			}
+			return cachedWaveSchema;
+		}
+		default:
+		{
+			int num = waveID;
+			while (num > 0)
+			{
+				WaveSchema waveSchema = null;
+				switch (waveType)
+				{
+				case WaveType.Wave_SinglePlayer:
+				{
+					PlayModeSchema selectedModeData = Singleton<PlayModesManager>.Instance.selectedModeData;
+					if (selectedModeData.maxBaseWave >= num)
+					{
+						waveSchema = WaveSchema.Initialize(DataBundleRuntime.TableRecordKey(selectedModeData.waves.RecordTable, num.ToString()));
+						break;
+					}
+					SeededRandomizer randomizer = new SeededRandomizer(num);
+					if (num % selectedModeData.bonusWaveInterval == 0)
+					{
+						int num2 = num / selectedModeData.bonusWaveInterval % DataBundleRuntime.Instance.GetRecordTableLength(typeof(WaveSchema), selectedModeData.endlessBonusWaves) + 1;
+						waveSchema = WaveSchema.Initialize(DataBundleRuntime.TableRecordKey(selectedModeData.endlessBonusWaves.RecordTable, num2.ToString()), randomizer);
+					}
+					else
+					{
+						int num3 = (num - 1) % DataBundleRuntime.Instance.GetRecordTableLength(typeof(WaveSchema), selectedModeData.endlessWaves) + 1;
+						waveSchema = WaveSchema.Initialize(DataBundleRuntime.TableRecordKey(selectedModeData.endlessWaves.RecordTable, num3.ToString()), randomizer);
+					}
+					break;
+				}
+				}
+				if (waveSchema == null)
+				{
+					num--;
+					continue;
+				}
+				return waveSchema;
+			}
+			return null;
+		}
+		}
+	}
+
+	public DataBundleTableHandle<HelperEnemySwapSchema> GetHelperSwapData()
+	{
+		if (mCorruptionSwapData == null)
+		{
+			mCorruptionSwapData = new DataBundleTableHandle<HelperEnemySwapSchema>("CorruptionSwap");
+		}
+		return mCorruptionSwapData;
+	}
+
+	public DataBundleTableHandle<EnemySwapSchema> GetDeathSwapData()
+	{
+		if (mDeathSwapData == null)
+		{
+			mDeathSwapData = new DataBundleTableHandle<EnemySwapSchema>("OnDeathSwaps");
+		}
+		return mDeathSwapData;
+	}
+
+	public void ReplaceHelperWithEnemy(Helper h)
+	{
+		if (h == null || h.health <= 0f)
 		{
 			return;
 		}
-		for (int i = 0; i < rewards.attributeCount; i++)
+		string text = null;
+		HelperEnemySwapSchema[] data = mCorruptionSwapData.Data;
+		foreach (HelperEnemySwapSchema helperEnemySwapSchema in data)
 		{
-			string[] array = rewards[i].Split(',');
-			switch (array[0])
+			if (helperEnemySwapSchema.helperSwapFrom.Key == h.id)
 			{
-			case "coins":
-				WeakGlobalInstance<CollectableManager>.instance.GiveResource(ECollectableType.coin, int.Parse(array[1]));
-				break;
-			case "gems":
-				WeakGlobalInstance<CollectableManager>.instance.GiveResource(ECollectableType.gem, int.Parse(array[1]));
-				break;
-			case "balls":
-				WeakGlobalInstance<CollectableManager>.instance.GiveResource(ECollectableType.pachinkoball, int.Parse(array[1]));
-				break;
-			default:
-				WeakGlobalInstance<CollectableManager>.instance.GiveSpecificPresent(array[0]);
+				text = helperEnemySwapSchema.enemySwapTo.Key;
 				break;
 			}
 		}
-	}
-
-	public static void ApplySpecialEvent(SDFTreeNode enemiesData)
-	{
-		if (Singleton<EventsManager>.instance.IsEventActive("halloween") && Singleton<PlayModesManager>.instance.selectedMode == "classic")
+		if (!string.IsNullOrEmpty(text))
 		{
-			SDFTreeNode sDFTreeNode = enemiesData.to("L_Zombie_Melee");
-			sDFTreeNode["prefab"] = "Characters/PFLzombiePumpkin";
-			sDFTreeNode = enemiesData.to("L_Zombie_Melee_Tutorial");
-			sDFTreeNode["prefab"] = "Characters/PFLzombiePumpkin";
+			Enemy c = ConstructEnemyWithEffect(text, 0f, h.transform.position, true, corruptionSpawnEffect);
+			WeakGlobalInstance<CharactersManager>.Instance.AddCharacter(c);
+			WeakGlobalInstance<CharactersManager>.Instance.DestroyCharacter(h);
 		}
-	}
-
-	public static SDFTreeNode GetWaveData(int waveID)
-	{
-		return GetWaveData(waveID, false);
-	}
-
-	public static SDFTreeNode GetWaveData(int waveID, bool bonusWave)
-	{
-		int num = waveID;
-		while (num > 0)
-		{
-			string waveFilePath = GetWaveFilePath(waveID, bonusWave);
-			if (Resources.Load(waveFilePath, typeof(TextAsset)) == null)
-			{
-				Debug.Log("WARNING: Could not find wave #" + num + ", will try with " + (num - 1));
-				num--;
-				continue;
-			}
-			return FilterEventData(SingletonMonoBehaviour<ResourcesManager>.instance.Open(waveFilePath));
-		}
-		return null;
-	}
-
-	private static SDFTreeNode FilterEventData(SDFTreeNode data)
-	{
-		if (Singleton<EventsManager>.instance.IsEventActive("halloween"))
-		{
-			if (data["scene"] == "InGame")
-			{
-				data["scene"] = "InGame_summernight";
-			}
-			else if (data["scene"] == "InGame_evil")
-			{
-				data["scene"] = "InGame_evilnight";
-			}
-			else if (data["scene"] == "InGame_fallday")
-			{
-				data["scene"] = "InGame_fallnight";
-			}
-			else if (data["scene"] == "InGame_springday")
-			{
-				data["scene"] = "InGame_springnight";
-			}
-			else if (data["scene"] == "InGame_winterday")
-			{
-				data["scene"] = "InGame_winternight";
-			}
-		}
-		return data;
-	}
-
-	public static string GetWaveFilePath(int waveID)
-	{
-		return GetWaveFilePath(waveID, false);
-	}
-
-	public static string GetWaveFilePath(int waveID, bool bonusWave)
-	{
-		string text = "Registry/";
-		text = ((!bonusWave && !Singleton<Profile>.instance.inBonusWave) ? (text + Singleton<PlayModesManager>.instance.selectedModeData["wavesPath"]) : (text + "BonusWaves/BonusWave"));
-		return text + string.Format("{0:000}", waveID);
 	}
 
 	private void LoadData()
 	{
-		enemiesData = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Enemies");
-		ApplySpecialEvent(enemiesData);
-		waveRootData = GetWaveData(mWaveIndex);
-		waveCommands = waveRootData.to("Commands");
-		rewards = waveRootData.to("rewards");
-		if (waveRootData.hasAttribute("tutorial"))
-		{
-			mTutorial = waveRootData["tutorial"];
-		}
-		if (waveRootData.hasAttribute("villageArchers"))
-		{
-			mVillageArchersLevel = int.Parse(waveRootData["villageArchers"]);
-		}
-		if (waveRootData.hasAttribute("bell"))
-		{
-			mBellLevel = int.Parse(waveRootData["bell"]);
-		}
+		waveRootData = GetWaveData();
+		string recordTable = Singleton<PlayModesManager>.Instance.selectedModeData.waves.RecordTable;
+		WaveRecordKey = DataBundleRuntime.TableRecordKey(recordTable, waveRootData.index.ToString());
+		Singleton<PlayStatistics>.Instance.data.shouldShowRateMeDialog = waveRootData.showRateMe;
+		Singleton<PlayStatistics>.Instance.data.shouldAwardMysteryBox = waveRootData.awardMysteryBox;
+		GetHelperSwapData();
+		mTutorial = waveRootData.tutorial;
+		mVillageArchersLevel = waveRootData.villageArchers;
+		mBellLevel = waveRootData.bell;
 		LoadLevelMultipliers();
 	}
 
 	private void LoadLevelMultipliers()
 	{
-		int num = Singleton<Profile>.instance.GetWaveLevel(mWaveIndex);
-		if (num >= 2)
+		if (Singleton<Profile>.Instance.inDailyChallenge || Singleton<Profile>.Instance.inMultiplayerWave)
 		{
-			SDFTreeNode sDFTreeNode = Singleton<Config>.instance.root.to("waveLevelMultipliers");
-			mLevelMultipliers.enemiesHealth = CalcMultiplier(float.Parse(sDFTreeNode["enemiesHealth"]), num - 1);
-			mLevelMultipliers.enemiesDamages = CalcMultiplier(float.Parse(sDFTreeNode["enemiesDamages"]), num - 1);
-			mLevelMultipliers.drops = CalcMultiplier(float.Parse(sDFTreeNode["drops"]), num - 1);
+			return;
+		}
+		PlayModeSchema selectedModeData = Singleton<PlayModesManager>.Instance.selectedModeData;
+		if (mWaveIndex <= selectedModeData.maxBaseWave)
+		{
+			int num = Singleton<Profile>.Instance.GetWaveLevel(mWaveIndex);
+			if (num >= 2)
+			{
+				float @float = Singleton<Config>.Instance.data.GetFloat(TextDBSchema.ChildKey("waveLevelMultipliers", "enemiesHealth"));
+				float float2 = Singleton<Config>.Instance.data.GetFloat(TextDBSchema.ChildKey("waveLevelMultipliers", "enemiesDamages"));
+				float float3 = Singleton<Config>.Instance.data.GetFloat(TextDBSchema.ChildKey("waveLevelMultipliers", "drops"));
+				mLevelMultipliers.enemiesHealth = CalcMultiplier(@float, num - 1);
+				mLevelMultipliers.enemiesDamages = CalcMultiplier(float2, num - 1);
+				mLevelMultipliers.drops = CalcMultiplier(float3, num - 1);
+			}
+		}
+		else
+		{
+			int times = mWaveIndex - selectedModeData.maxBaseWave;
+			float float4 = Singleton<Config>.Instance.data.GetFloat(TextDBSchema.ChildKey("waveLevelMultipliersEndless", "enemiesHealth"));
+			float float5 = Singleton<Config>.Instance.data.GetFloat(TextDBSchema.ChildKey("waveLevelMultipliersEndless", "enemiesDamages"));
+			float float6 = Singleton<Config>.Instance.data.GetFloat(TextDBSchema.ChildKey("waveLevelMultipliersEndless", "drops"));
+			mLevelMultipliers.enemiesHealth = CalcMultiplier(float4, times);
+			mLevelMultipliers.enemiesDamages = CalcMultiplier(float5, times);
+			mLevelMultipliers.drops = CalcMultiplier(float6, times);
 		}
 	}
 
 	private void RunNextCommand()
 	{
-		if (!waveCommands.hasAttribute(mNextCommandToRun))
+		if (mNextCommandToRun >= waveRootData.Commands.Length)
 		{
+			if (specialBossName != string.Empty)
+			{
+				WeakGlobalInstance<CharactersManager>.Instance.AddCharacter(ConstructEnemy(specialBossName));
+				specialBossName = string.Empty;
+				WeakGlobalMonoBehavior<BannerManager>.Instance.OpenBanner(new BannerBoss(5f * WeakGlobalMonoBehavior<InGameImpl>.Instance.timeScalar));
+			}
 			return;
 		}
-		string text = waveCommands[mNextCommandToRun];
+		string command = GetCommand(mNextCommandToRun);
 		mNextCommandToRun++;
-		switch (GetCommandType(text))
+		switch (GetCommandType(command))
 		{
 		case CommandType.UserDefined:
-			WeakGlobalSceneBehavior<InGameImpl>.instance.RunSpecialWaveCommand(text.ToLower());
+			WeakGlobalMonoBehavior<InGameImpl>.Instance.RunSpecialWaveCommand(command.ToLower());
 			break;
 		case CommandType.Delay:
 		{
-			KeyValuePair<float, float> keyValuePair = ExtractTimer(text);
+			KeyValuePair<float, float> keyValuePair = ExtractTimer(command);
 			mSpawnDelayTimer += UnityEngine.Random.value * (keyValuePair.Value - keyValuePair.Key) + keyValuePair.Key;
 			break;
 		}
@@ -407,7 +487,7 @@ public class WaveManager : WeakGlobalInstance<WaveManager>
 			bool flag = false;
 			foreach (string mAllDifferentEnemy in mAllDifferentEnemies)
 			{
-				if (string.Compare(mAllDifferentEnemy, text, true) == 0)
+				if (string.Compare(mAllDifferentEnemy, command, true) == 0)
 				{
 					flag = true;
 					break;
@@ -415,16 +495,12 @@ public class WaveManager : WeakGlobalInstance<WaveManager>
 			}
 			if (flag)
 			{
-				WeakGlobalInstance<CharactersManager>.instance.AddCharacter(ConstructEnemy(text));
-			}
-			else
-			{
-				Debug.Log("WARNING: Unknown enemy ID in wave data: " + text);
+				WeakGlobalInstance<CharactersManager>.Instance.AddCharacter(ConstructEnemy(command));
 			}
 			break;
 		}
 		case CommandType.LegionTag:
-			if (text[0] != '(')
+			if (command[0] != '(')
 			{
 				break;
 			}
@@ -435,7 +511,7 @@ public class WaveManager : WeakGlobalInstance<WaveManager>
 			}
 			else if (mSpawnedEnemiesSoFar == mEnemiesKilledSoFar)
 			{
-				WeakGlobalSceneBehavior<InGameImpl>.instance.RunSpecialWaveCommand("@legionalert");
+				WeakGlobalMonoBehavior<InGameImpl>.Instance.RunSpecialWaveCommand("@legionalert");
 				if (this.onLegionStart != null)
 				{
 					this.onLegionStart();
@@ -449,12 +525,53 @@ public class WaveManager : WeakGlobalInstance<WaveManager>
 		}
 	}
 
+	public void SpawnRandomEnemy(Vector3 position, float spawnRange)
+	{
+		string cmd = mAllDifferentEnemies[UnityEngine.Random.Range(0, mAllDifferentEnemies.Count - 1)];
+		SpawnExtraEnemy(cmd, position, spawnRange);
+	}
+
+	public void SpawnLegendaryStrikeEnemy(Vector3 position, float spawnRange)
+	{
+		if (WeakGlobalMonoBehavior<InGameImpl>.Instance.LegendaryStrikeEnemies != null)
+		{
+			string cmd = WeakGlobalMonoBehavior<InGameImpl>.Instance.LegendaryStrikeEnemies[UnityEngine.Random.Range(0, WeakGlobalMonoBehavior<InGameImpl>.Instance.LegendaryStrikeEnemies.Count)];
+			SpawnExtraEnemy(cmd, position, spawnRange);
+		}
+		else
+		{
+			SpawnRandomEnemy(position, spawnRange);
+		}
+	}
+
+	public void SpawnExtraEnemy(string cmd, Vector3 position, float spawnRange)
+	{
+		bool flag = false;
+		foreach (string mAllDifferentEnemy in mAllDifferentEnemies)
+		{
+			if (string.Compare(mAllDifferentEnemy, cmd, true) == 0)
+			{
+				flag = true;
+				break;
+			}
+		}
+		if (flag)
+		{
+			WeakGlobalInstance<CharactersManager>.Instance.AddCharacter(ConstructEnemy(cmd, spawnRange, position, true));
+		}
+	}
+
+	private string GetCommand(int index)
+	{
+		return (!DataBundleRecordKey.IsNullOrEmpty(waveRootData.Commands[index].enemy)) ? waveRootData.Commands[index].enemy.Key : waveRootData.Commands[index].command;
+	}
+
 	private void SkipToEndOfLegion()
 	{
-		while (mNextCommandToRun < waveCommands.attributeCount)
+		while (mNextCommandToRun < waveRootData.Commands.Length)
 		{
-			string text = waveCommands[mNextCommandToRun];
-			CommandType commandType = GetCommandType(text);
+			string command = GetCommand(mNextCommandToRun);
+			CommandType commandType = GetCommandType(command);
 			mNextCommandToRun++;
 			switch (commandType)
 			{
@@ -462,7 +579,7 @@ public class WaveManager : WeakGlobalInstance<WaveManager>
 				mEnemiesKilledSoFar++;
 				break;
 			case CommandType.LegionTag:
-				if (text[0] == ')')
+				if (command[0] == ')')
 				{
 					return;
 				}
@@ -491,169 +608,104 @@ public class WaveManager : WeakGlobalInstance<WaveManager>
 		if (!(mSpawnDelayTimer > 0f))
 		{
 			mSpawnDelayTimer = 0f;
-			if (WeakGlobalInstance<CharactersManager>.instance.enemiesCount < 10)
+			if (WeakGlobalInstance<CharactersManager>.Instance.enemiesCount < 10)
 			{
 				RunNextCommand();
 			}
 		}
 	}
 
-	private Enemy ConstructEnemy(string enemyID)
+	public Enemy ConstructEnemy(string enemyID)
 	{
-		SDFTreeNode sDFTreeNode = enemiesData.to(enemyID);
-		if (sDFTreeNode == null)
+		if (!Singleton<EnemiesDatabase>.Instance.Contains(enemyID))
 		{
-			Debug.Log("ERROR: Unkown enemy: " + enemyID);
 			return null;
 		}
-		return SpawnEnemy(enemyID, sDFTreeNode, mEnemiesSpawnArea.size.x, mEnemiesSpawnArea.transform.position, false);
+		return ConstructEnemyWithEffect(enemyID, mEnemiesSpawnArea.size.x, mEnemiesSpawnArea.transform.position, false, null);
 	}
 
 	public Enemy ConstructEnemy(string enemyID, float sizeOfSpawnArea, Vector3 spawnPos, bool dynamicSpawn)
 	{
-		SDFTreeNode sDFTreeNode = enemiesData.to(enemyID);
-		if (sDFTreeNode == null)
+		if (!Singleton<EnemiesDatabase>.Instance.Contains(enemyID))
 		{
-			Debug.Log("ERROR: Unkown enemy: " + enemyID);
 			return null;
 		}
-		return SpawnEnemy(enemyID, sDFTreeNode, sizeOfSpawnArea, spawnPos, dynamicSpawn);
+		return ConstructEnemyWithEffect(enemyID, sizeOfSpawnArea, spawnPos, dynamicSpawn, null);
 	}
 
-	private Enemy SpawnEnemy(string uniqueID, SDFTreeNode data, float sizeOfSpawnArea, Vector3 spawnPos, bool dynamicSpawn)
+	private Enemy ConstructEnemyWithEffect(string enemyID, float sizeOfSpawnArea, Vector3 spawnPos, bool dynamicSpawn, GameObject effectToSpawn)
 	{
-		mSpawnedEnemiesSoFar++;
-		bool result = false;
-		bool.TryParse(data["flying"], out result);
-		float result2 = 0f;
-		float.TryParse(data["bowRange"], out result2);
-		CharactersManager.ELanePreference preference = CharactersManager.ELanePreference.any;
-		if (data.hasAttribute("lane"))
+		return SpawnEnemy(enemyID, GetCharacterData(enemyID), sizeOfSpawnArea, spawnPos, dynamicSpawn, effectToSpawn);
+	}
+
+	private Enemy SpawnEnemy(string uniqueID, CharacterData data, float sizeOfSpawnArea, Vector3 spawnPos, bool dynamicSpawn, GameObject effectToUse)
+	{
+		spawnPos.x = WeakGlobalInstance<CharactersManager>.Instance.GetBestSpawnXPos(spawnPos, sizeOfSpawnArea, data.lanePref, true, data.isFlying, data.bowAttackRange > 0f);
+		Enemy enemy = new Enemy(data, mZTarget, spawnPos, 1);
+		data.Setup(enemy);
+		enemy.maxHealth *= mLevelMultipliers.enemiesHealth;
+		enemy.health = enemy.maxHealth;
+		enemy.meleeDamage *= mLevelMultipliers.enemiesDamages;
+		enemy.bowDamage *= mLevelMultipliers.enemiesDamages;
+		if (WeakGlobalMonoBehavior<InGameImpl>.Instance.HasPeaceCharm())
 		{
-			preference = (CharactersManager.ELanePreference)(int)Enum.Parse(typeof(CharactersManager.ELanePreference), data["lane"]);
+			CharmSchema charmSchema = Singleton<CharmsDatabase>.Instance[WeakGlobalMonoBehavior<InGameImpl>.Instance.activeCharm];
+			enemy.meleeDamage *= charmSchema.multiplier;
+			enemy.bowDamage *= charmSchema.multiplier;
 		}
-		spawnPos.x = WeakGlobalInstance<CharactersManager>.instance.GetBestSpawnXPos(spawnPos, sizeOfSpawnArea, preference, true, result, result2 > 0f);
-		Enemy e = new Enemy(data["prefab"], mZTarget, spawnPos);
-		e.uniqueID = uniqueID;
-		UnityEngine.Object.Instantiate((!dynamicSpawn) ? mSpawnEffect : mAltSpawnEffect, e.position, Quaternion.identity);
-		e.maxHealth = float.Parse(data["health"]);
-		e.health = e.maxHealth;
-		float result3 = 0f;
-		float.TryParse(data["meleeRange"], out result3);
-		e.meleeAttackRange = result3;
-		float.TryParse(data["meleeDamage"], out result3);
-		e.meleeDamage = result3;
-		e.bowAttackRange = result2;
-		float.TryParse(data["bowDamage"], out result3);
-		e.bowDamage = result3;
-		float.TryParse(data["damageBuffPercent"], out result3);
-		e.damageBuffPercent = result3;
-		if (data.hasAttribute("projectile"))
+		enemy.SetupFromCharacterData(data);
+		if (data.resourceDropAlways != string.Empty)
 		{
-			e.bowProjectile = (Projectile.EProjectileType)(int)Enum.Parse(typeof(Projectile.EProjectileType), data["projectile"]);
-		}
-		bool result4 = false;
-		bool.TryParse(data["usesBladeWeapon"], out result4);
-		e.meleeWeaponIsABlade = result4;
-		bool.TryParse(data["gateRusher"], out result4);
-		e.isGateRusher = result4;
-		bool.TryParse(data["exploseOnMelee"], out result4);
-		e.exploseOnMelee = result4;
-		float.TryParse(data["meleeFreeze"], out result3);
-		e.meleeFreeze = result3;
-		e.isFlying = result;
-		float.TryParse(data["autoHealthRecovery"], out result3);
-		e.autoHealthRecovery = result3;
-		bool.TryParse(data["boss"], out result4);
-		e.isBoss = result4;
-		e.meleeAttackFrequency = float.Parse(data["attackFrequency"]);
-		e.bowAttackFrequency = e.meleeAttackFrequency;
-		e.spawnFriendID = data["spawnFriendID"];
-		float num = float.Parse(data["speedMin"]);
-		float num2 = float.Parse(data["speedMax"]);
-		e.controller.speed = UnityEngine.Random.value * (num2 - num) + num;
-		if (data.hasAttribute("knockbackPower"))
-		{
-			e.knockbackPower = int.Parse(data["knockbackPower"]);
-		}
-		if (data.hasAttribute("knockbackResistance"))
-		{
-			e.knockbackResistance = int.Parse(data["knockbackResistance"]);
-		}
-		e.resourceDrops.amountDropped.max = int.Parse(data["resourceDropMax"]);
-		e.resourceDrops.amountDropped.min = int.Parse(data["resourceDropMin"]);
-		e.resourceDrops.guaranteedCoinsAward = int.Parse(data["award"]);
-		e.maxHealth *= mLevelMultipliers.enemiesHealth;
-		e.health = e.maxHealth;
-		e.meleeDamage *= mLevelMultipliers.enemiesDamages;
-		e.bowDamage *= mLevelMultipliers.enemiesDamages;
-		if (WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm == "peace" || WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm.Contains("+peace"))
-		{
-			float num3 = float.Parse(Singleton<CharmsDatabase>.instance.GetAttribute(WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm, "damageMultiplier"));
-			e.meleeDamage *= num3;
-			e.bowDamage *= num3;
-		}
-		if (data.hasAttribute("weaponMeleePrefab"))
-		{
-			e.meleeWeaponPrefab = Resources.Load(data["weaponMeleePrefab"]) as GameObject;
-		}
-		if (e.meleeWeaponPrefab != null && (WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm == "peace" || WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm.Contains("+peace")))
-		{
-			e.meleeWeaponPrefab = Resources.Load("Props/PFChickenSword") as GameObject;
-		}
-		if (data.hasAttribute("weaponRangedPrefab"))
-		{
-			e.rangedWeaponPrefab = Resources.Load(data["weaponRangedPrefab"]) as GameObject;
-		}
-		if (data.hasAttribute("spawnOnDeath"))
-		{
-			int spawnCount = 1;
-			if (data.hasAttribute("spawnOnDeathCount"))
-			{
-				spawnCount = int.Parse(data["spawnOnDeathCount"]);
-			}
-			Enemy enemy = e;
+			Character selfPtr = enemy;
+			string resourceID = data.resourceDropAlways;
 			enemy.onDeathEvent = (Action)Delegate.Combine(enemy.onDeathEvent, (Action)delegate
 			{
-				e.SpawnOffspring(data["spawnOnDeath"], spawnCount);
+				SpawnExtraCollectable(resourceID, selfPtr);
 			});
 		}
-		if (data.hasAttribute("resourceDropAlways"))
+		if (effectToUse != null)
 		{
-			Character selfPtr = e;
-			Enemy enemy2 = e;
-			enemy2.onDeathEvent = (Action)Delegate.Combine(enemy2.onDeathEvent, (Action)delegate
-			{
-				SpawnExtraCollectable(data["resourceDropAlways"], selfPtr);
-			});
+			enemy.controller.SpawnEffectAtJoint(effectToUse, "body_effect", false);
 		}
-		return e;
+		else
+		{
+			SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource("Assets/Game/Resources/FX/DivineEnemy.prefab", 1);
+			if (cachedResource != null)
+			{
+				enemy.controller.SpawnEffectAtJoint(cachedResource.Resource as GameObject, "body_effect", false);
+			}
+		}
+		if (dynamicSpawn)
+		{
+			enemy.dynamicSpawn = true;
+		}
+		else
+		{
+			mSpawnedEnemiesSoFar++;
+		}
+		return enemy;
 	}
 
 	private void SpawnExtraCollectable(string collectableType, Character theEnemy)
 	{
 		if (theEnemy != null)
 		{
-			WeakGlobalInstance<CollectableManager>.instance.ForceSpawnResourceType(collectableType, theEnemy.position);
+			WeakGlobalInstance<CollectableManager>.Instance.ForceSpawnResourceType(collectableType, theEnemy.position);
 		}
 	}
 
 	private void AnalyseWaveCommandsForStats()
 	{
-		mTotalNumEnemies = 0;
+		mTotalNumEnemies = ((Singleton<Profile>.Instance.MultiplayerData.IsMultiplayerGameSessionActive() && Singleton<Profile>.Instance.MultiplayerData.MultiplayerGameSessionData.defensiveBuffs[0] > 0) ? 1 : 0);
 		mAllDifferentEnemies.Clear();
-		for (int i = 0; waveCommands.hasAttribute(i); i++)
+		for (int i = 0; i < waveRootData.Commands.Length; i++)
 		{
-			string data = waveCommands[i].ToLower();
+			string data = GetCommand(i);
 			switch (GetCommandType(data))
 			{
 			case CommandType.Spawn:
 				mTotalNumEnemies++;
-				if (enemiesData.to(data) == null)
-				{
-					Debug.Log("WARNING: Unknown enemy ID in wave: " + data);
-				}
-				else if (!mAllDifferentEnemies.Exists((string element) => element == data))
+				if (Singleton<EnemiesDatabase>.Instance.Contains(data) && !mAllDifferentEnemies.Exists((string element) => element == data))
 				{
 					mAllDifferentEnemies.Add(data);
 				}
@@ -666,7 +718,6 @@ public class WaveManager : WeakGlobalInstance<WaveManager>
 				break;
 			}
 		}
-		Singleton<PlayStatistics>.instance.stats.lastWaveTotalEnemies = mTotalNumEnemies;
 	}
 
 	private CommandType GetCommandType(string cmd)
@@ -688,6 +739,27 @@ public class WaveManager : WeakGlobalInstance<WaveManager>
 			return CommandType.Delay;
 		}
 		return CommandType.Spawn;
+	}
+
+	private CharacterData GetCharacterData(string id)
+	{
+		if (!mCharacterDataPool.ContainsKey(id))
+		{
+			mCharacterDataPool.Add(id, new CharacterData(id, 1));
+		}
+		return mCharacterDataPool[id];
+	}
+
+	public bool HasCorruptionEnemy()
+	{
+		return allDifferentEnemies.Find((string s) => s.Contains("Amanojaku")) != null;
+	}
+
+	public void UnloadData()
+	{
+		mCharacterDataPool.Clear();
+		mCorruptionSwapData.Unload();
+		waveRootData = null;
 	}
 
 	private static float CalcMultiplier(float mult, int times)

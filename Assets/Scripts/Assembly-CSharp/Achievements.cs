@@ -1,171 +1,424 @@
 using System.Collections.Generic;
+using Glu.Plugins.ASocial;
 using UnityEngine;
+using UnityEngine.SocialPlatforms;
 
-public class Achievements : SingletonMonoBehaviour<Achievements>
+public class Achievements : Singleton<Achievements>
 {
-	private const float kPriority = 50000f;
-
-	private const float kYOut = -26f;
-
-	private const float kYIn = 32f;
-
-	private const float kSpeed = 0.3f;
-
-	private const float kShowingTimer = 2f;
-
-	private const int kTextMaxWidth = 390;
-
-	private readonly Vector2 kTextOffset = new Vector2(18f, 0f);
-
-	private SUISprite mPopup;
-
-	private SUILabel mText;
-
-	private float mYPos = -26f;
-
-	private float mSlideDir;
-
-	private float mWaitTimer;
-
-	private List<string> mQueue = new List<string>();
-
-	private float deltaTime
+	public enum AchievementType
 	{
-		get
+		CountAchievement = 0,
+		ThresholdAchievement = 1,
+		MaskAchievement = 2,
+		MetaAchievement = 3,
+		DummyCountAchievement = 4
+	}
+
+	private Dictionary<string, AchievementTracker> mAchievements = new Dictionary<string, AchievementTracker>();
+
+	private List<string> achievements;
+
+	private bool mSuppressPartialReporting;
+
+	private bool mInitialized;
+
+	private bool mUseInGameAlert = true;
+
+	private bool mNeedToLoadAchievements;
+
+	private List<AchievementTracker> mQueuedAchievements = new List<AchievementTracker>();
+
+	private float mDisplayDelay;
+
+	public void SetAchievementCompletionCount(string achievementId, int count)
+	{
+		AchievementTracker value;
+		if (mAchievements.TryGetValue(achievementId, out value) && value.completedCount != count && value.completedCount < value.achievement.Data.CompletionCount && (value.unityAchievement == null || !value.unityAchievement.completed))
 		{
-			float num = ((Time.timeScale != 1f) ? SUIScreen.deltaTime : Time.deltaTime);
-			if (num > 0.1f)
-			{
-				num = 0.1f;
-			}
-			return num;
+			value.completedCount = count;
+			float progress = 100f * (float)count / (float)Mathf.Max(1, value.achievement.Data.CompletionCount);
+			ReportProgress(value, progress);
 		}
 	}
 
-	private Vector2 position
+	public void SetAchievementCompletionCount(AchievementSchema achievement, int count)
 	{
-		get
+		SetAchievementCompletionCount(achievement.id, count);
+	}
+
+	public void IncrementAchievement(string achievementId, int count)
+	{
+		AchievementTracker value;
+		if (mAchievements.TryGetValue(achievementId, out value) && value.completedCount < value.achievement.Data.CompletionCount && (value.unityAchievement == null || !value.unityAchievement.completed))
 		{
-			return mPopup.position;
+			value.completedCount += count;
+			float progress = 100f * (float)value.completedCount / (float)Mathf.Max(1, value.achievement.Data.CompletionCount);
+			ReportProgress(value, progress);
 		}
-		set
+	}
+
+	public void IncrementAchievement(AchievementSchema achievement, int count)
+	{
+		IncrementAchievement(achievement.id, count);
+	}
+
+	public void CheckThresholdAchievement(string achievementId, int count)
+	{
+		AchievementTracker value;
+		if (mAchievements.TryGetValue(achievementId, out value) && value.completedCount < value.achievement.Data.CompletionCount && (value.unityAchievement == null || !value.unityAchievement.completed) && count >= value.achievement.Data.CompletionCount)
 		{
-			if (mPopup != null)
+			value.completedCount = value.achievement.Data.CompletionCount;
+			ReportProgress(value, 100f);
+		}
+	}
+
+	public void CheckThresholdAchievement(AchievementSchema achievement, int count)
+	{
+		CheckThresholdAchievement(achievement.id, count);
+	}
+
+	public void DoMaskAchievement(string achievementId, int index)
+	{
+		AchievementTracker value;
+		if (index > 0 && index <= 32 && mAchievements.TryGetValue(achievementId, out value) && value.unityAchievement != null && !value.unityAchievement.completed)
+		{
+			int num = 1 << index - 1;
+			if ((value.completedCount & num) == 0)
 			{
-				mPopup.position = value;
-				mText.position = value + kTextOffset;
+				value.completedCount |= num;
+				CheckMaskAchievement(value);
 			}
 		}
 	}
 
-	public void Init()
+	private void CheckMaskAchievement(AchievementTracker tracker)
 	{
+		int num = 0;
+		for (int i = 0; i < tracker.achievement.Data.CompletionCount; i++)
+		{
+			int num2 = 1 << i;
+			if ((tracker.completedCount & num2) != 0)
+			{
+				num++;
+			}
+		}
+		float progress = (float)num / (float)tracker.achievement.Data.CompletionCount;
+		ReportProgress(tracker, progress);
+	}
+
+	public void DoMaskAchievement(AchievementSchema achievement, int index)
+	{
+		DoMaskAchievement(achievement.id, index);
+	}
+
+	public void CheckMetaAchievement(string achievementId)
+	{
+		AchievementTracker value;
+		if (!mAchievements.TryGetValue(achievementId, out value) || value.completedCount >= value.achievement.Data.CompletionCount || (value.unityAchievement != null && value.unityAchievement.completed))
+		{
+			return;
+		}
+		if (achievements == null)
+		{
+			achievements = DataBundleRuntime.Instance.GetRecordKeys(typeof(AchievementListSchema), achievementId, false);
+		}
+		if (achievements == null || achievements.Count <= 0)
+		{
+			return;
+		}
+		bool flag = true;
+		foreach (string achievement in achievements)
+		{
+			if (!IsAchievementDone(achievement))
+			{
+				flag = false;
+				break;
+			}
+		}
+		if (flag)
+		{
+			value.completedCount = value.achievement.Data.CompletionCount;
+			ReportProgress(value, 100f);
+		}
+	}
+
+	public bool IsAchievementDone(string achievementId)
+	{
+		AchievementTracker value;
+		if (mAchievements.TryGetValue(achievementId, out value) && (value.progress >= 100f || (value.unityAchievement != null && value.unityAchievement.completed)))
+		{
+			return true;
+		}
+		return false;
+	}
+
+	public void OnLogin()
+	{
+		if (mInitialized)
+		{
+			Social.LoadAchievements(OnLoadAchievements);
+		}
+		else
+		{
+			mNeedToLoadAchievements = true;
+		}
+		Initialize();
+	}
+
+	public void OnLoadAchievements(IAchievement[] achievements)
+	{
+		foreach (IAchievement achievement in achievements)
+		{
+			foreach (KeyValuePair<string, AchievementTracker> mAchievement in mAchievements)
+			{
+				AchievementTracker value = mAchievement.Value;
+				if (value != null && value.achievement != null && value.achievement.Data.GameCenterID == achievement.id)
+				{
+					value.unityAchievement = achievement;
+					if (achievement.percentCompleted >= 100.0 && value.completedCount < value.achievement.Data.CompletionCount)
+					{
+						value.completedCount = value.achievement.Data.CompletionCount;
+						value.progress = 100f;
+						Singleton<Profile>.Instance.saveData.SetDictionaryValue("achievements", value.achievement.Data.id, value.completedCount);
+					}
+					if (value.achievement.Data.achievementType == AchievementType.MetaAchievement)
+					{
+						CheckMetaAchievement(value.achievement.Data.id);
+					}
+					else if (value.achievement.Data.achievementType == AchievementType.MaskAchievement)
+					{
+						CheckMaskAchievement(value);
+					}
+					else if (!achievement.completed && value.completedCount >= value.achievement.Data.CompletionCount)
+					{
+						ReportProgress(value, 100f);
+					}
+					break;
+				}
+			}
+		}
+		Social.LoadAchievementDescriptions(OnLoadAchievementDescriptions);
+	}
+
+	public void OnLoadAchievementDescriptions(IAchievementDescription[] descriptions)
+	{
+		foreach (IAchievementDescription achievementDescription in descriptions)
+		{
+			AchievementTracker achievementTracker = null;
+			foreach (KeyValuePair<string, AchievementTracker> mAchievement in mAchievements)
+			{
+				AchievementTracker value = mAchievement.Value;
+				if (value == null || value.achievement == null || !(value.achievement.Data.GameCenterID == achievementDescription.id))
+				{
+					continue;
+				}
+				achievementTracker = value;
+				if (value.unityAchievement == null)
+				{
+					value.unityAchievement = Social.CreateAchievement();
+					value.unityAchievement.id = achievementDescription.id;
+					value.unityAchievement.percentCompleted = 0.0;
+					if (value.completedCount >= value.achievement.Data.CompletionCount)
+					{
+						ReportProgress(value, 100f);
+					}
+				}
+				value.description = achievementDescription;
+				if (value.achievement.Data.achievementType == AchievementType.MetaAchievement)
+				{
+					CheckMetaAchievement(value.achievement.Data.id);
+				}
+				break;
+			}
+			if (achievementTracker == null)
+			{
+			}
+		}
+	}
+
+	private void ReportProgress(AchievementTracker achievement, float progress)
+	{
+		bool flag = achievement.progress >= 100f;
+		Singleton<Profile>.Instance.saveData.SetDictionaryValue("achievements", achievement.achievement.Data.id, achievement.completedCount);
+		achievement.progress = progress;
+		if (!flag && achievement.progress >= 100f && achievement.achievement.Data.achievementType != AchievementType.DummyCountAchievement)
+		{
+			achievement.shared = false;
+			if (PlayerPrefs.GetInt("ach_" + achievement.achievement.Data.GameCenterID, 0) != 1 && mUseInGameAlert)
+			{
+				mQueuedAchievements.Add(achievement);
+				mDisplayDelay = 1f;
+			}
+		}
+		if (achievement.unityAchievement != null)
+		{
+			if (!mSuppressPartialReporting || progress >= 100f)
+			{
+				UpdateServerAchievement(achievement);
+			}
+			else
+			{
+				achievement.dirty = true;
+			}
+		}
+		if (AJavaTools.Properties.IsBuildAmazon())
+		{
+			Amazon.UpdateProgress(achievement.achievement.Data.GameCenterID, achievement.progress);
+		}
+		else
+		{
+			achievement.dirty = true;
+		}
+	}
+
+	private void UpdateServerAchievement(AchievementTracker achievement)
+	{
+		if (achievement.unityAchievement == null)
+		{
+			achievement.dirty = false;
+		}
+		else
+		{
+			if (achievement.unityAchievement.completed || achievement.unityAchievement.percentCompleted == (double)achievement.progress)
+			{
+				return;
+			}
+			achievement.unityAchievement.percentCompleted = achievement.progress;
+			if (achievement.progress >= 100f)
+			{
+				achievement.shared = false;
+			}
+			achievement.unityAchievement.ReportProgress(delegate(bool result)
+			{
+				if (result)
+				{
+					achievement.dirty = false;
+				}
+			});
+		}
 	}
 
 	public void Update()
 	{
-		if (mPopup != null)
+		if (AJavaTools.Properties.IsBuildAmazon() && mQueuedAchievements.Count > 0 && AchievementNotification.Instance == null)
 		{
-			UpdatePopup();
-		}
-		else
-		{
-			CheckForNextPopup();
-		}
-	}
-
-	public void Award(string gameCenterAchievementID)
-	{
-		if (!AddToQueue(gameCenterAchievementID))
-		{
-		}
-	}
-
-	private bool AddToQueue(string gameCenterAchievementID)
-	{
-		List<string> achievementsDisplayed = Singleton<Profile>.instance.GetAchievementsDisplayed();
-		if (achievementsDisplayed.Contains(gameCenterAchievementID))
-		{
-			return false;
-		}
-		achievementsDisplayed.Add(gameCenterAchievementID);
-		Singleton<Profile>.instance.SetAchievementsDisplayed(achievementsDisplayed);
-		return true;
-	}
-
-	private void StartNewSlideAnimation()
-	{
-		mYPos = -26f;
-		mSlideDir = 1f;
-		mWaitTimer = 0f;
-	}
-
-	private void SpawnPopup()
-	{
-		mPopup = new SUISprite("Sprites/Menus/gamecenter_popup");
-		mPopup.priority = 50000f;
-		mText = new SUILabel("default18");
-		mText.priority = 50000.1f;
-		mText.maxWidth = 390;
-		mText.maxLines = 1;
-		mText.anchor = TextAnchor.MiddleCenter;
-		mText.alignment = TextAlignment.Center;
-		position = new Vector2(512f, mYPos);
-	}
-
-	private void UpdatePopup()
-	{
-		if (mSlideDir == 0f)
-		{
-			mWaitTimer += deltaTime;
-			if (mWaitTimer >= 2f)
+			mDisplayDelay -= Time.deltaTime;
+			if (mDisplayDelay <= 0f)
 			{
-				mSlideDir = -1f;
+				AchievementTracker achievementTracker = mQueuedAchievements[0];
+				mQueuedAchievements.RemoveAt(0);
+				AchievementNotification.AchievementDescription = StringUtils.GetStringFromStringRef(achievementTracker.achievement.Data.completedDescription);
+				AchievementNotification.AchievementTitle = StringUtils.GetStringFromStringRef(achievementTracker.achievement.Data.displayName);
+				AchievementNotification.AchievementIcon = achievementTracker.achievement.Data.Icon;
+				GluiActionSender.SendGluiAction("ALERT_EMPTY", null, null);
+				GluiDelayedAction.Create("ALERT_ACHIEVEMENT", 1f, null, true);
+				mDisplayDelay = 2f;
+				PlayerPrefs.SetInt("ach_" + achievementTracker.achievement.Data.GameCenterID, 1);
 			}
+		}
+	}
+
+	public void SuppressPartialReporting(bool suppress)
+	{
+		mSuppressPartialReporting = suppress;
+		if (suppress)
+		{
 			return;
 		}
-		Vector2 vector = mPopup.position;
-		vector.y += 193.33333f * deltaTime * mSlideDir;
-		if (vector.y <= -26f)
+		foreach (KeyValuePair<string, AchievementTracker> mAchievement in mAchievements)
 		{
-			vector.y = -26f;
-			CheckForNextPopup();
-		}
-		else if (vector.y >= 32f)
-		{
-			vector.y = 32f;
-			mWaitTimer = 0f;
-			mSlideDir = 0f;
-		}
-		position = vector;
-	}
-
-	private void PopAndDrawNextText()
-	{
-		string id = mQueue[0];
-		mQueue.RemoveAt(0);
-		string empty = string.Empty;
-		empty = ((!Singleton<Localizer>.instance.Has(id)) ? Singleton<Localizer>.instance.Get("achievement_notext") : Singleton<Localizer>.instance.Get(id));
-		mText.text = empty;
-	}
-
-	private void CheckForNextPopup()
-	{
-		if (mQueue.Count > 0)
-		{
-			StartNewSlideAnimation();
-			if (mPopup == null)
+			if (mAchievement.Value.dirty)
 			{
-				SpawnPopup();
+				UpdateServerAchievement(mAchievement.Value);
 			}
-			PopAndDrawNextText();
 		}
-		else if (mPopup != null)
+	}
+
+	public void ReportOfflineProgress()
+	{
+		foreach (KeyValuePair<string, AchievementTracker> mAchievement in mAchievements)
 		{
-			mPopup.Destroy();
-			mPopup = null;
-			mText.Destroy();
-			mText = null;
+			float progress = 100f * (float)mAchievement.Value.completedCount / (float)Mathf.Max(1, mAchievement.Value.achievement.Data.CompletionCount);
+		}
+	}
+
+	public void Initialize()
+	{
+		mInitialized = true;
+		mAchievements.Clear();
+		Singleton<Profile>.Instance.achievementRating = 0;
+		string table = "Achievements";
+		foreach (string item in DataBundleRuntime.Instance.EnumerateRecordKeys<AchievementSchema>(table))
+		{
+			DataBundleRecordHandle<AchievementSchema> dataBundleRecordHandle = new DataBundleRecordHandle<AchievementSchema>(table, item);
+			AchievementTracker achievementTracker = new AchievementTracker();
+			achievementTracker.achievement = dataBundleRecordHandle;
+			mAchievements[dataBundleRecordHandle.Data.id] = achievementTracker;
+			achievementTracker.completedCount = Singleton<Profile>.Instance.saveData.GetDictionaryValue<int>("achievements", dataBundleRecordHandle.Data.id);
+			if (achievementTracker.completedCount >= achievementTracker.achievement.Data.CompletionCount)
+			{
+				achievementTracker.progress = 100f;
+				Singleton<Profile>.Instance.achievementRating += dataBundleRecordHandle.Data.AchievementPoints;
+			}
+		}
+		if (mNeedToLoadAchievements)
+		{
+			Social.LoadAchievements(OnLoadAchievements);
+			mNeedToLoadAchievements = false;
+		}
+	}
+
+	public void LoadFrontEndData()
+	{
+		foreach (KeyValuePair<string, AchievementTracker> mAchievement in mAchievements)
+		{
+			mAchievement.Value.achievement.Load(DataBundleResourceGroup.FrontEnd, false, null);
+		}
+	}
+
+	public void UnloadData()
+	{
+		foreach (KeyValuePair<string, AchievementTracker> mAchievement in mAchievements)
+		{
+			mAchievement.Value.achievement.Unload();
+		}
+	}
+
+	public AchievementTracker[] GetAchievements()
+	{
+		List<AchievementTracker> list = new List<AchievementTracker>();
+		foreach (KeyValuePair<string, AchievementTracker> mAchievement in mAchievements)
+		{
+			if (mAchievement.Value.achievement.Data.achievementType != AchievementType.DummyCountAchievement)
+			{
+				list.Add(mAchievement.Value);
+			}
+		}
+		return list.ToArray();
+	}
+
+	public void ShowUI()
+	{
+		if (Social.localUser.authenticated)
+		{
+			Social.ShowAchievementsUI();
+		}
+	}
+
+	public AchievementTracker GetAchievement(string id)
+	{
+		AchievementTracker value = null;
+		mAchievements.TryGetValue(id, out value);
+		return value;
+	}
+
+	public void Reset()
+	{
+		foreach (KeyValuePair<string, AchievementTracker> mAchievement in mAchievements)
+		{
+			AchievementTracker value = mAchievement.Value;
+			value.completedCount = 0;
+			Singleton<Profile>.Instance.saveData.SetDictionaryValue("achievements", value.achievement.Data.id, value.completedCount);
 		}
 	}
 }

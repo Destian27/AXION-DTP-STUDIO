@@ -1,74 +1,79 @@
 using UnityEngine;
 
-public class HUDHealthBar
+public class HUDHealthBar : UIHandlerComponent
 {
-	private const float kHealthChangeSpeed = 1f;
+	private Color mStartupColor;
 
-	private SUISprite mBarSprite;
+	private GluiSprite mPortrait;
 
-	private float mCurrentDisplayedHealth;
+	private GluiMeter mMeter;
 
-	private Character mObservedCharacter;
+	private Hero mObservedChar;
 
-	private bool mObservedCharacterIsHero;
+	private bool mPortraitSet;
 
-	public Character observedCharacter
+	public HUDHealthBar(GameObject uiParent, Hero charToObserve)
 	{
-		get
-		{
-			return mObservedCharacter;
-		}
-		set
-		{
-			mObservedCharacter = value;
-			mCurrentDisplayedHealth = value.health;
-			mObservedCharacterIsHero = mObservedCharacter is Hero;
-			UpdateBarLengthAndColor();
-		}
+		mMeter = uiParent.FindChildComponent<GluiMeter>("Meter_Life");
+		mStartupColor = mMeter.Color;
+		mObservedChar = charToObserve;
+		mPortrait = uiParent.FindChildComponent<GluiSprite>("Swap_HeroPortrait");
 	}
 
-	public HUDHealthBar(SUISprite barSprite)
+	public void Update(bool updateExpensiveVisuals)
 	{
-		mBarSprite = barSprite;
-	}
-
-	public void Update()
-	{
-		if (mObservedCharacter != null)
+		TrySetPortrait();
+		float mountedHealth = mObservedChar.mountedHealth;
+		if (mountedHealth > 0f)
 		{
-			UpdateHealthChangeEasing();
-			UpdateBarLengthAndColor();
+			mMeter.Value = mountedHealth / mObservedChar.mountedHealthMax;
+			mMeter.Color = Color.cyan;
+		}
+		else
+		{
+			UpdateHealthThreshold();
 		}
 	}
 
-	public bool IsTouchZone(Vector2 pos)
+	public bool OnUIEvent(string eventID)
 	{
 		return false;
 	}
 
-	private void UpdateHealthChangeEasing()
+	public void OnPause(bool pause)
 	{
-		if (mCurrentDisplayedHealth > mObservedCharacter.health)
+	}
+
+	private void TrySetPortrait()
+	{
+		if (!mPortraitSet && WeakGlobalMonoBehavior<HUDSharedHeroPortrait>.Instance != null)
 		{
-			mCurrentDisplayedHealth = Mathf.Max(mObservedCharacter.health, mCurrentDisplayedHealth - Time.deltaTime / 1f * mObservedCharacter.maxHealth);
-		}
-		else if (mCurrentDisplayedHealth < mObservedCharacter.health)
-		{
-			mCurrentDisplayedHealth = Mathf.Min(mObservedCharacter.health, mCurrentDisplayedHealth + Time.deltaTime / 1f * mObservedCharacter.maxHealth);
+			Texture2D texture = WeakGlobalMonoBehavior<HUDSharedHeroPortrait>.Instance.Texture;
+			if (texture != null)
+			{
+				mPortrait.Texture = texture;
+				mPortraitSet = true;
+			}
 		}
 	}
 
-	private void UpdateBarLengthAndColor()
+	private void UpdateHealthThreshold()
 	{
-		if (mObservedCharacterIsHero)
+		float health = mObservedChar.health;
+		float value = health / mObservedChar.maxHealth;
+		mMeter.Value = value;
+		float num = mObservedChar.maxHealth / 3f;
+		if (health <= num)
 		{
-			string healthBarFileToUse = ((Hero)mObservedCharacter).healthBarFileToUse;
-			if (mBarSprite.texture != healthBarFileToUse)
-			{
-				mBarSprite.texture = healthBarFileToUse;
-			}
+			mMeter.Color = Color.red;
 		}
-		float x = mCurrentDisplayedHealth / mObservedCharacter.maxHealth;
-		mBarSprite.scale = new Vector2(x, 1f);
+		else if (health <= num * 2f)
+		{
+			mMeter.Color = Color.yellow;
+		}
+		else
+		{
+			mMeter.Color = mStartupColor;
+		}
 	}
 }

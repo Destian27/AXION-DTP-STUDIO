@@ -13,11 +13,13 @@ public class Collectable
 
 	private const float kSpawnTimeFactor = 2f;
 
-	private const float kSpawnArcHeight = 96f;
+	private const float kSpawnArcHeight = 0.96f;
 
-	private const float kMagnetHeight = 64f;
+	private const float kMagnetHeight = 0.64f;
 
 	private const float kMagnetVerticalVel = 1.3f;
+
+	private const float kFadeOutTime = 4f;
 
 	private const string kShaderColorName = "_TintColor";
 
@@ -53,9 +55,13 @@ public class Collectable
 
 	private float mMagnetHeightOffset;
 
+	private Color mOriginalColor;
+
 	public bool wasAtLeftOfHero { get; private set; }
 
 	public bool isReadyToDie { get; private set; }
+
+	public bool isDestroyed { get; private set; }
 
 	public bool isReadyToBeCollected
 	{
@@ -89,7 +95,7 @@ public class Collectable
 	{
 		mStartPos = startPos;
 		mTargetPos = targetPos;
-		mObject = (GameObject)Object.Instantiate(template.prefab, startPos, Quaternion.identity);
+		mObject = GameObjectPool.DefaultObjectPool.Acquire(template.prefab);
 		mAnimPlayer = mObject.GetComponent<Animation>();
 		mTransform = mObject.transform;
 		mMaterial = mObject.GetComponentInChildren<Renderer>().material;
@@ -99,8 +105,10 @@ public class Collectable
 		mValue = template.amount;
 		mTimeLeftAlive = template.lifetime;
 		mShouldStartFadeOut = false;
-		wasAtLeftOfHero = targetPos.z < WeakGlobalSceneBehavior<InGameImpl>.instance.hero.position.z;
+		wasAtLeftOfHero = targetPos.z < WeakGlobalMonoBehavior<InGameImpl>.Instance.hero.position.z;
 		isReadyToDie = false;
+		mOriginalColor = Color.grey;
+		WeakGlobalInstance<CollectableManager>.Instance.RecordLootDropped(mType, mValue);
 	}
 
 	public void Update()
@@ -114,6 +122,8 @@ public class Collectable
 				mTime = 0f;
 				mStartPos = mTargetPos;
 				mState = CollectableState.WaitForPickup;
+				mAnimPlayer.Play("IdlePickup");
+				mAnimPlayer.wrapMode = WrapMode.Loop;
 			}
 			break;
 		case CollectableState.WaitForPickup:
@@ -130,6 +140,7 @@ public class Collectable
 			if (mTimeLeftAlive <= 0f)
 			{
 				mState = CollectableState.Destroy;
+				Destroy();
 			}
 			break;
 		case CollectableState.TimeOutFade:
@@ -149,7 +160,7 @@ public class Collectable
 			mWasCollected = true;
 			if (mMaterial != null && mMaterial.HasProperty("_TintColor"))
 			{
-				mMaterial.SetColor("_TintColor", new Color(1f, 1f, 1f, 1f));
+				mMaterial.SetColor("_TintColor", new Color(mOriginalColor.r, mOriginalColor.g, mOriginalColor.b, 1f));
 			}
 			if (mAnimPlayer == null || mAnimPlayer["Pickup"] == null)
 			{
@@ -165,14 +176,17 @@ public class Collectable
 
 	private void UpdateFadeOut()
 	{
-		if (mMaterial != null && mMaterial.HasProperty("_TintColor"))
+		if (!WeakGlobalMonoBehavior<InGameImpl>.Instance.gameOver)
 		{
-			mMaterial.SetColor("_TintColor", new Color(1f, 1f, 1f, Mathf.Clamp(mTimeLeftAlive, 0f, 1f)));
-		}
-		mTimeLeftAlive -= Time.deltaTime;
-		if (mTimeLeftAlive <= 0f)
-		{
-			mState = CollectableState.Destroy;
+			if (mMaterial != null && mMaterial.HasProperty("_TintColor"))
+			{
+				mMaterial.SetColor("_TintColor", new Color(mOriginalColor.r, mOriginalColor.g, mOriginalColor.b, Mathf.Clamp(mTimeLeftAlive / 4f, 0f, 1f)));
+			}
+			mTimeLeftAlive -= Time.deltaTime;
+			if (mTimeLeftAlive <= 0f)
+			{
+				mState = CollectableState.Destroy;
+			}
 		}
 	}
 
@@ -183,19 +197,23 @@ public class Collectable
 		if (mTime < 1f)
 		{
 			float num = mTime - 0.5f;
-			vector.y += 96f - 384f * (num * num);
+			vector.y += 0.96f - 3.84f * (num * num);
 		}
 		position = vector;
 	}
 
 	public void Destroy()
 	{
-		if (mWasCollected)
+		if (!isDestroyed)
 		{
-			WeakGlobalInstance<CollectableManager>.instance.GiveResource(mType, mValue);
+			if (mWasCollected)
+			{
+				WeakGlobalInstance<CollectableManager>.Instance.GiveResource(mType, mValue);
+			}
+			GameObjectPool.DefaultObjectPool.Release(mObject);
+			mObject = null;
+			isDestroyed = true;
 		}
-		Object.Destroy(mObject);
-		mObject = null;
 	}
 
 	private void UpdateTimer()
@@ -204,10 +222,10 @@ public class Collectable
 		{
 			return;
 		}
-		if (mShouldStartFadeOut || (WeakGlobalSceneBehavior<InGameImpl>.instance.hero != null && WeakGlobalSceneBehavior<InGameImpl>.instance.hero.health > 0f && WeakGlobalSceneBehavior<InGameImpl>.instance.hero.controller.currentAnimation != "revive"))
+		if (mShouldStartFadeOut || (WeakGlobalMonoBehavior<InGameImpl>.Instance.hero != null && WeakGlobalMonoBehavior<InGameImpl>.Instance.hero.health > 0f && WeakGlobalMonoBehavior<InGameImpl>.Instance.hero.controller.currentAnimation != "revive"))
 		{
 			mTimeLeftAlive -= Time.deltaTime;
-			if (mTimeLeftAlive <= 1f)
+			if (mTimeLeftAlive <= 4f)
 			{
 				mShouldStartFadeOut = true;
 			}
@@ -220,7 +238,7 @@ public class Collectable
 
 	private void UpdateMagnetEffect()
 	{
-		float magnetMaxDist = WeakGlobalInstance<CollectableManager>.instance.magnetMaxDist;
+		float magnetMaxDist = WeakGlobalInstance<CollectableManager>.Instance.magnetMaxDist;
 		if (magnetMaxDist <= 0f)
 		{
 			if (mMagnetHeightOffset > 0f)
@@ -233,13 +251,13 @@ public class Collectable
 			}
 			return;
 		}
-		float z = WeakGlobalSceneBehavior<InGameImpl>.instance.hero.position.z;
+		float z = WeakGlobalMonoBehavior<InGameImpl>.Instance.hero.position.z;
 		Vector3 vector2 = position;
 		float num2 = Mathf.Abs(z - vector2.z);
 		if (!(num2 > magnetMaxDist))
 		{
-			float magnetMinSpeed = WeakGlobalInstance<CollectableManager>.instance.magnetMinSpeed;
-			float magnetMaxSpeed = WeakGlobalInstance<CollectableManager>.instance.magnetMaxSpeed;
+			float magnetMinSpeed = WeakGlobalInstance<CollectableManager>.Instance.magnetMinSpeed;
+			float magnetMaxSpeed = WeakGlobalInstance<CollectableManager>.Instance.magnetMaxSpeed;
 			float num3 = magnetMinSpeed + (magnetMaxDist - num2) * (magnetMaxSpeed - magnetMinSpeed) / magnetMaxDist;
 			if (wasAtLeftOfHero)
 			{
@@ -249,10 +267,10 @@ public class Collectable
 			{
 				vector2.z -= num3 * Time.deltaTime;
 			}
-			if (mMagnetHeightOffset < 64f)
+			if (mMagnetHeightOffset < 0.64f)
 			{
 				vector2.y -= mMagnetHeightOffset;
-				mMagnetHeightOffset = Mathf.Min(mMagnetHeightOffset + 1.3f, 64f);
+				mMagnetHeightOffset = Mathf.Min(mMagnetHeightOffset + 1.3f, 0.64f);
 				vector2.y += mMagnetHeightOffset;
 			}
 			position = vector2;

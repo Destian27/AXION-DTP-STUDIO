@@ -7,6 +7,7 @@ AnimationClip:
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
   m_Name: ring
+  m_AnimationType: 1
   m_Compressed: 0
   m_RotationCurves: []
   m_CompressedRotationCurves: []
@@ -56,6 +57,22 @@ AnimationClip:
   m_Bounds:
     m_Center: {x: -56.336884, y: 45.610332, z: -3.7399445}
     m_Extent: {x: 109.3768, y: 57.10095, z: 144.6711}
+  m_MuscleClipInfo:
+    m_StartTime: 0
+    m_StopTime: 0
+    m_OrientationOffsetY: 0
+    m_Level: 0
+    m_CycleOffset: 0
+    m_LoopBlend: 0
+    m_LoopBlendOrientation: 0
+    m_LoopBlendPositionY: 0
+    m_LoopBlendPositionXZ: 0
+    m_KeepOriginalOrientation: 0
+    m_KeepOriginalPositionY: 0
+    m_KeepOriginalPositionXZ: 0
+    m_HeightFromFeet: 0
+    m_Mirror: 0
+    m_KeepAdditionalBonesAnimation: 0
   m_EditorCurves: []
   m_EulerEditorCurves: []
   m_Events:
@@ -67,23 +84,23 @@ AnimationClip:
     intParameter: 0
     messageOptions: 0
   - time: 0.8666667
-    functionName: PlaySoundEvent
-    data: PUEffort
+    functionName: PlaySoundEventFromTaggedAnim
+    data: Attack
     objectReferenceParameter: {fileID: 0}
     floatParameter: 0
     intParameter: 0
     messageOptions: 0
-  - time: 2.3666666
-    functionName: PlaySoundEvent
-    data: Effort
+  - time: 2.4333334
+    functionName: PlaySoundEventFromTaggedAnim
+    data: SwooshMed
     objectReferenceParameter: {fileID: 0}
     floatParameter: 0
     intParameter: 0
     messageOptions: 0
   - time: 2.5666666
-    functionName: SpawnEffectPrefab
-    data: shockwave
-    objectReferenceParameter: {fileID: 1153671872261835, guid: beb3f8e689d699e40a283c69cebe33da, type: 2}
+    functionName: PlaySoundEventFromTaggedAnim
+    data: AttackBig
+    objectReferenceParameter: {fileID: 0}
     floatParameter: 0
     intParameter: 0
     messageOptions: 0

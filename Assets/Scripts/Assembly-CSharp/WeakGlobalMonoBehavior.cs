@@ -4,7 +4,7 @@ public class WeakGlobalMonoBehavior<T> : MonoBehaviour
 {
 	private static TypedWeakReference<T> mUniqueInstance;
 
-	public static T instance
+	public static T Instance
 	{
 		get
 		{
@@ -13,6 +13,14 @@ public class WeakGlobalMonoBehavior<T> : MonoBehaviour
 				return default(T);
 			}
 			return mUniqueInstance.ptr;
+		}
+	}
+
+	public static bool Exists
+	{
+		get
+		{
+			return mUniqueInstance != null && mUniqueInstance.ptr != null;
 		}
 	}
 

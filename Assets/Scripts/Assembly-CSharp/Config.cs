@@ -1,8 +1,8 @@
 public class Config : Singleton<Config>
 {
-	private SDFTreeNode mData;
+	private TextDBSchema[] mData;
 
-	public SDFTreeNode root
+	public TextDBSchema[] data
 	{
 		get
 		{
@@ -13,11 +13,13 @@ public class Config : Singleton<Config>
 	public Config()
 	{
 		ResetCachedData();
-		SingletonMonoBehaviour<ResourcesManager>.instance.onInvalidateCache += ResetCachedData;
 	}
 
 	public void ResetCachedData()
 	{
-		mData = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Config");
+		if (DataBundleRuntime.Instance != null && DataBundleRuntime.Instance.Initialized)
+		{
+			mData = DataBundleUtils.InitializeRecords<TextDBSchema>("Config");
+		}
 	}
 }

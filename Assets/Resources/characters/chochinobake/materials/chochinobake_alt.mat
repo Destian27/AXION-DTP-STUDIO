@@ -14,17 +14,11 @@ Material:
     - first:
         name: _MainTex
       second:
-        m_Texture: {fileID: 2800000, guid: dc1743103024f0f4eaa8738e51105625, type: 3}
+        m_Texture: {fileID: 2800000, guid: 9a910b932005d3f46b19ad4c96f0fb7c, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
-    m_Floats:
-    - first:
-        name: _ColorIntensity
-      second: 0
+    m_Floats: {}
     m_Colors:
     - first:
         name: _Color
-      second: {r: 1, g: 1, b: 1, a: 1}
-    - first:
-        name: _MainColor
       second: {r: 1, g: 1, b: 1, a: 1}

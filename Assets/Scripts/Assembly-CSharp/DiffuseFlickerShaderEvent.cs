@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public class DiffuseFlickerShaderEvent : ShaderEvent
@@ -19,8 +20,8 @@ public class DiffuseFlickerShaderEvent : ShaderEvent
 
 	private FadeInOutEvent mFadeEvent;
 
-	public DiffuseFlickerShaderEvent(GameObject obj, Color targetColor, float fadeInTime, float holdTime, float fadeOutTime, float effectDuration)
-		: base(obj)
+	public DiffuseFlickerShaderEvent(GameObject obj, Color targetColor, float fadeInTime, float holdTime, float fadeOutTime, float effectDuration, List<GameObject> objToIgnore, Dictionary<int, Color> originalColors)
+		: base(obj, objToIgnore, originalColors)
 	{
 		mTargetColor = targetColor;
 		mFadeEvent = new FadeInOutEvent(fadeInTime, holdTime, fadeOutTime);
@@ -29,7 +30,7 @@ public class DiffuseFlickerShaderEvent : ShaderEvent
 
 	public override void resetToBaseValues()
 	{
-		SetAllMaterialsToColor(Color.white);
+		RevertAllMaterialsToColor(1f);
 	}
 
 	public override void update()
@@ -46,8 +47,6 @@ public class DiffuseFlickerShaderEvent : ShaderEvent
 		{
 			mFadeEvent.Reset();
 		}
-		Color currentObjectColor = GetCurrentObjectColor();
-		Color allMaterialsToColor = Color.Lerp(currentObjectColor, mTargetColor, mFadeEvent.interpolant);
-		SetAllMaterialsToColor(allMaterialsToColor);
+		BlendAllMaterialsToColor(mTargetColor, mFadeEvent.interpolant);
 	}
 }

@@ -16,7 +16,17 @@ public struct CharacterStats
 
 	public bool isFlying;
 
+	public bool isMount;
+
+	public bool isMounted;
+
+	public bool canMeleeFliers;
+
+	public bool canMeleeProjectiles;
+
 	public bool exploseOnMelee;
+
+	public bool enemyIgnoresMe;
 
 	public float meleeFreeze;
 
@@ -27,6 +37,8 @@ public struct CharacterStats
 	public float autoHealthRecovery;
 
 	public int knockbackPower;
+
+	public int knockbackPowerRanged;
 
 	public int knockbackResistance;
 
@@ -44,7 +56,7 @@ public struct CharacterStats
 
 	public float bowAttackFrequency;
 
-	public Projectile.EProjectileType projectile;
+	public string projectile;
 
 	public float speed;
 
@@ -59,4 +71,10 @@ public struct CharacterStats
 	public string upgradeAlliesTo;
 
 	public string spawnFriendID;
+
+	public DOTInfo dotInfo;
+
+	public CanBuffFunc canBuffFunc;
+
+	public int leadershipCostModifierBuff;
 }

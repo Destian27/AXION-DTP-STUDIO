@@ -2,47 +2,123 @@ using System.Collections.Generic;
 
 public class PlayStatistics : Singleton<PlayStatistics>
 {
-	public struct Stats
+	public class Data
 	{
-		public bool zombieModeStartedUnlocked;
+		public class LootEntry
+		{
+			public string id;
 
-		public int lastWavePlayed;
+			public int num;
 
-		public int lastWaveLevel;
+			public string packId;
 
-		public bool lastWaveWon;
+			public ECollectableType? presentType;
+		}
 
-		public int lastWaveTotalEnemies;
+		public int wavePlayed;
 
-		public int lastWaveCoinsAward;
+		public int wavePlayedLevel;
 
-		public int lastWaveCoinsCollected;
+		public bool victory;
 
-		public bool heroUsedHisMeleeAttack;
+		public int inGameGoldGained;
 
-		public bool heroUsedHisRangedAttack;
+		public int inGameSoulsAwarded;
 
-		public bool heroInvokedHelpers;
+		public int inGameSoulsGained;
 
-		public bool gateWasDamaged;
+		public List<LootEntry> loot;
 
-		public bool summonedTroopOtherThanFarmerOrSwordsmith;
+		public int totalLootDroppedValue;
 
-		public bool summonedTroopFarmer;
+		public int droppedCoins;
 
-		public bool summonedTroopSwordsmith;
+		public int droppedGems;
 
-		public List<StoreData.Item> previousStoreItems;
+		public int droppedSouls;
+
+		public int droppedUnlockables;
+
+		public int droppedOtherValue;
+
+		public int revivesAtStart;
+
+		public int revivesUsed;
+
+		public int teaAtStart;
+
+		public int teaUsed;
+
+		public int sushiAtStart;
+
+		public int sushiUsed;
+
+		public bool shouldShowRateMeDialog;
+
+		public bool shouldAwardMysteryBox;
+
+		public WaveManager.WaveType waveTypePlayed;
+
+		public Data()
+		{
+			loot = new List<LootEntry>();
+		}
+
+		public void AddLoot(string id, int num, ECollectableType? presentType = null)
+		{
+			if (num <= 0)
+			{
+				return;
+			}
+			if (!presentType.HasValue || presentType.Value < ECollectableType.presentA || presentType.Value > ECollectableType.presentD)
+			{
+				presentType = null;
+			}
+			switch (CashIn.GetType(id))
+			{
+			case CashIn.ItemType.Unknown:
+				return;
+			case CashIn.ItemType.Gems:
+				id = "gems";
+				break;
+			case CashIn.ItemType.Coins:
+				id = "coins";
+				break;
+			case CashIn.ItemType.Balls:
+				id = "balls";
+				break;
+			}
+			if (!presentType.HasValue)
+			{
+				foreach (LootEntry item in loot)
+				{
+					if (item.id == id && !item.presentType.HasValue)
+					{
+						item.num += num;
+						return;
+					}
+				}
+			}
+			LootEntry lootEntry = new LootEntry();
+			lootEntry.id = id;
+			lootEntry.num = num;
+			lootEntry.presentType = presentType;
+			loot.Add(lootEntry);
+		}
 	}
 
-	public Stats stats;
+	public Data data;
 
-	public void ResetStats(int forWave)
+	public PlayStatistics()
 	{
-		stats = default(Stats);
-		stats.previousStoreItems = StoreAvailability.GetList();
-		stats.lastWavePlayed = forWave;
-		stats.lastWaveLevel = Singleton<Profile>.instance.GetWaveLevel(forWave);
-		stats.zombieModeStartedUnlocked = Singleton<Profile>.instance.zombieModeUnlocked;
+		Reset();
+	}
+
+	public void Reset()
+	{
+		data = new Data();
+		data.revivesAtStart = Singleton<Profile>.Instance.GetNumPotions("revivePotion");
+		data.teaAtStart = Singleton<Profile>.Instance.GetNumPotions("leadershipPotion");
+		data.sushiAtStart = Singleton<Profile>.Instance.GetNumPotions("healthPotion");
 	}
 }

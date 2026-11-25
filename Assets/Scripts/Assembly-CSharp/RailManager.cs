@@ -96,7 +96,6 @@ public class RailManager : WeakGlobalInstance<RailManager>
 		int count = list.Count;
 		if (count == 0)
 		{
-			Debug.Log("WARNING: missing Rail points.");
 			return;
 		}
 		if (z <= list[0].z)
@@ -120,7 +119,6 @@ public class RailManager : WeakGlobalInstance<RailManager>
 				return;
 			}
 		}
-		Debug.Log("** Safety net hit ... problem?");
 		mBetweens[1] = mBetweens[0];
 	}
 }

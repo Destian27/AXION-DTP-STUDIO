@@ -1,318 +1,288 @@
+using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 public class StoreAvailability_Abilities
 {
-	public static void GetAll(List<StoreData.Item> items)
+	public static void GetGlobalAbilities(List<StoreData.Item> items)
 	{
-		string[] allIDs = Singleton<AbilitiesDatabase>.instance.allIDs;
-		foreach (string abilityID in allIDs)
+		foreach (string globalAbilityID in Singleton<AbilitiesDatabase>.Instance.GlobalAbilityIDs)
 		{
-			Singleton<AbilitiesDatabase>.instance.BuildStoreData(abilityID, items);
+			Singleton<AbilitiesDatabase>.Instance.BuildStoreData(globalAbilityID, items);
 		}
+	}
+
+	public static void GetHeroAbilities(HeroSchema hero, List<StoreData.Item> items)
+	{
+		AbilitySchema[] abilities = hero.Abilities;
+		foreach (AbilitySchema abilitySchema in abilities)
+		{
+			if (!Singleton<AbilitiesDatabase>.Instance.GlobalAbilityIDs.Contains(abilitySchema.id))
+			{
+				Singleton<AbilitiesDatabase>.Instance.BuildStoreData(abilitySchema.id, items);
+			}
+		}
+	}
+
+	private static StoreData.Item GetAbilityUpgrade(string abilityID, out AbilitySchema mainData)
+	{
+		bool flag = false;
+		mainData = Singleton<AbilitiesDatabase>.Instance[abilityID];
+		if ((float)Singleton<Profile>.Instance.highestUnlockedWave < mainData.levelToUnlock)
+		{
+			flag = true;
+		}
+		else
+		{
+			EnsureProperInitialLevel(abilityID);
+		}
+		int abilityLevel = Singleton<Profile>.Instance.GetAbilityLevel(abilityID);
+		int num = abilityLevel + 1;
+		int num2 = mainData.levelData.Length;
+		DataBundleRecordKey dataBundleRecordKey = null;
+		float salePercentage = SaleItemSchema.FindActiveSaleForItem(abilityID);
+		bool flag2 = false;
+		Cost costForItem;
+		if (num > num2)
+		{
+			if (mainData.infiniteUpgradeCostCoins == 0f && mainData.infiniteUpgradeCostGems == 0f)
+			{
+				flag2 = true;
+				num = num2;
+			}
+			costForItem = new Cost((int)mainData.infiniteUpgradeCostCoins + "," + (int)mainData.infiniteUpgradeCostGems, salePercentage);
+		}
+		else
+		{
+			costForItem = new Cost(mainData.levelData[num - 1].costCoins + "," + mainData.levelData[num - 1].costGems, salePercentage);
+			dataBundleRecordKey = mainData.levelData[num - 1].upgradeDescription;
+		}
+		bool isLastUpgrade = num == num2;
+		StoreData.Item item = new StoreData.Item(delegate
+		{
+			LevelUpAbility(costForItem, abilityID, isLastUpgrade);
+		});
+		item.cost = costForItem;
+		item.id = abilityID;
+		string iconPath = mainData.IconPath;
+		item.LoadIcon(iconPath);
+		item.locked = flag;
+		item.unlockAtWave = (int)mainData.levelToUnlock;
+		item.isNew = (float)Singleton<Profile>.Instance.highestUnlockedWave == mainData.levelToUnlock && (!SingletonMonoBehaviour<StoreMenuImpl>.Exists || !SingletonMonoBehaviour<StoreMenuImpl>.Instance.HasViewedNewItem(item.id));
+		if (flag)
+		{
+			item.unlockCondition = string.Format(StringUtils.GetStringFromStringRef("LocalizedStrings", "store_unlockatwave"), item.unlockAtWave);
+		}
+		string stringFromStringRef = StringUtils.GetStringFromStringRef(mainData.displayName);
+		if (flag2)
+		{
+			item.maxlevel = true;
+			item.title = string.Format(StringUtils.GetStringFromStringRef("LocalizedStrings", "store_upgrades_complete"), stringFromStringRef);
+		}
+		else
+		{
+			item.title = string.Format(StringUtils.GetStringFromStringRef("LocalizedStrings", "store_format_upgrade_tolevel"), stringFromStringRef, num);
+		}
+		item.unlockTitle = stringFromStringRef;
+		item.details.Name = stringFromStringRef;
+		string text = StringUtils.GetStringFromStringRef(mainData.description);
+		if (!DataBundleRecordKey.IsNullOrEmpty(dataBundleRecordKey))
+		{
+			text = string.Format("{0} {1}", text, StringUtils.GetStringFromStringRef(dataBundleRecordKey));
+		}
+		item.details.AddSmallDescription(text);
+		item.details.Count = abilityLevel;
+		item.analyticsEvent = "UpgradePurchased";
+		item.analyticsParams = new Dictionary<string, object>();
+		item.analyticsParams["ItemName"] = "Ability_" + item.id;
+		item.analyticsParams["UpgradeLevel"] = num;
+		return item;
 	}
 
 	public static void GetAbilityUpgrade_DamageOnly(string abilityID, List<StoreData.Item> items)
 	{
-		bool flag = false;
-		SDFTreeNode sDFTreeNode = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Abilities/" + abilityID);
-		if (Singleton<EventsManager>.instance.IsEventActive(sDFTreeNode["eventID"]))
+		AbilitySchema mainData;
+		StoreData.Item abilityUpgrade = GetAbilityUpgrade(abilityID, out mainData);
+		int abilityLevel = Singleton<Profile>.Instance.GetAbilityLevel(abilityID);
+		int num = abilityLevel + 1;
+		if (num > 1)
 		{
-			if (Singleton<Profile>.instance.highestUnlockedWave < int.Parse(sDFTreeNode["waveToUnlock"]))
-			{
-				flag = true;
-			}
-			else
-			{
-				EnsureProperInitialLevel(abilityID);
-			}
-			int num = Singleton<Profile>.instance.GetAbilityLevel(abilityID) + 1;
-			bool isLastUpgrade = sDFTreeNode.childCount == num;
-			StoreData.Item item = new StoreData.Item(delegate
-			{
-				LevelUpAbility(abilityID, isLastUpgrade);
-			});
-			if (num > 1)
-			{
-				item.details.SetColumns(num - 1, num);
-				item.details.AddStat("strength_stats", InfiniteUpgrades.Extrapolate<int>(sDFTreeNode, "infiniteUpgradeDamage", "damage", num - 1).ToString(), InfiniteUpgrades.Extrapolate<int>(sDFTreeNode, "infiniteUpgradeDamage", "damage", num).ToString());
-			}
-			if (num > sDFTreeNode.childCount)
-			{
-				item.cost = new Cost(sDFTreeNode["infiniteUpgradeCost"], Singleton<SalesDatabase>.instance.GetSaleFor(abilityID));
-			}
-			else
-			{
-				SDFTreeNode sDFTreeNode2 = sDFTreeNode.to(num);
-				item.cost = new Cost(sDFTreeNode2["cost"], Singleton<SalesDatabase>.instance.GetSaleFor(abilityID));
-			}
-			item.id = abilityID;
-			item.icon = sDFTreeNode["icon"];
-			item.isEvent = sDFTreeNode["eventID"] != string.Empty;
-			item.locked = flag;
-			item.unlockAtWave = int.Parse(sDFTreeNode["waveToUnlock"]);
-			if (flag)
-			{
-				item.unlockCondition = string.Format(Singleton<Localizer>.instance.Get("store_unlockatwave"), item.unlockAtWave);
-			}
-			item.title = string.Format(Singleton<Localizer>.instance.Get("store_format_upgrade_tolevel"), Singleton<Localizer>.instance.Parse(sDFTreeNode["displayName"]), num.ToString());
-			item.unlockTitle = Singleton<Localizer>.instance.Parse(sDFTreeNode["displayName"]);
-			item.details.AddSmallDescription((!sDFTreeNode.hasAttribute("desc")) ? string.Empty : sDFTreeNode["desc"]);
-			items.Add(item);
+			abilityUpgrade.details.SetColumns(abilityLevel, num);
+			abilityUpgrade.details.AddStat("strength_stats", Mathf.RoundToInt(mainData.Extrapolate(abilityLevel, (AbilityLevelSchema als) => als.damage)).ToString(), Mathf.RoundToInt(mainData.Extrapolate(num, (AbilityLevelSchema als) => als.damage)).ToString());
 		}
+		items.Add(abilityUpgrade);
 	}
 
 	public static void GetAbilityUpgrade_DivineIntervention(string abilityID, List<StoreData.Item> items)
 	{
-		bool flag = false;
-		SDFTreeNode sDFTreeNode = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Abilities/" + abilityID);
-		if (!Singleton<EventsManager>.instance.IsEventActive(sDFTreeNode["eventID"]))
+		AbilitySchema mainData;
+		StoreData.Item abilityUpgrade = GetAbilityUpgrade(abilityID, out mainData);
+		int abilityLevel = Singleton<Profile>.Instance.GetAbilityLevel(abilityID);
+		int num = abilityLevel + 1;
+		if (num > 1)
 		{
-			return;
+			float num2 = mainData.Extrapolate(abilityLevel, (AbilityLevelSchema als) => als.effectModifier);
+			float num3 = mainData.Extrapolate(num, (AbilityLevelSchema als) => als.effectModifier);
+			abilityUpgrade.details.AddStat("summon_ally", num2.ToString(), num3.ToString());
+			abilityUpgrade.details.SetColumns(num - 1, num);
 		}
-		if (Singleton<Profile>.instance.highestUnlockedWave < int.Parse(sDFTreeNode["waveToUnlock"]))
-		{
-			flag = true;
-		}
-		else
-		{
-			EnsureProperInitialLevel(abilityID);
-		}
-		int num = Singleton<Profile>.instance.GetAbilityLevel(abilityID) + 1;
-		SDFTreeNode sDFTreeNode2 = sDFTreeNode.to(string.Format("{0:000}", num));
-		if (sDFTreeNode2 != null)
-		{
-			bool isLastUpgrade = sDFTreeNode.childCount == num;
-			StoreData.Item item = new StoreData.Item(delegate
-			{
-				LevelUpAbility(abilityID, isLastUpgrade);
-			});
-			SDFTreeNode sDFTreeNode3 = sDFTreeNode.to(string.Format("{0:000}", num - 1));
-			if (sDFTreeNode3 != null)
-			{
-				item.details.AddStat("summon_ally", GetPercentString(sDFTreeNode3["summonAllyChance"]), GetPercentString(sDFTreeNode2["summonAllyChance"]));
-				item.details.SetColumns(num - 1, num);
-			}
-			item.id = abilityID;
-			item.icon = sDFTreeNode["icon"];
-			item.isEvent = sDFTreeNode["eventID"] != string.Empty;
-			item.locked = flag;
-			item.unlockAtWave = int.Parse(sDFTreeNode["waveToUnlock"]);
-			if (flag)
-			{
-				item.unlockCondition = string.Format(Singleton<Localizer>.instance.Get("store_unlockatwave"), item.unlockAtWave);
-			}
-			item.cost = new Cost(sDFTreeNode2["cost"], Singleton<SalesDatabase>.instance.GetSaleFor(abilityID));
-			item.title = string.Format(Singleton<Localizer>.instance.Get("store_format_upgrade_tolevel"), Singleton<Localizer>.instance.Parse(sDFTreeNode["displayName"]), num.ToString());
-			item.unlockTitle = Singleton<Localizer>.instance.Parse(sDFTreeNode["displayName"]);
-			item.details.AddSmallDescription((!sDFTreeNode.hasAttribute("desc")) ? string.Empty : sDFTreeNode["desc"]);
-			items.Add(item);
-		}
+		items.Add(abilityUpgrade);
 	}
 
 	public static void GetAbilityUpgrade_Lethargy(string abilityID, List<StoreData.Item> items)
 	{
-		bool flag = false;
-		SDFTreeNode sDFTreeNode = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Abilities/" + abilityID);
-		if (!Singleton<EventsManager>.instance.IsEventActive(sDFTreeNode["eventID"]))
+		AbilitySchema mainData;
+		StoreData.Item abilityUpgrade = GetAbilityUpgrade(abilityID, out mainData);
+		int abilityLevel = Singleton<Profile>.Instance.GetAbilityLevel(abilityID);
+		int num = abilityLevel + 1;
+		if (num > 1)
 		{
-			return;
+			float secs = mainData.Extrapolate(abilityLevel, (AbilityLevelSchema als) => als.effectDuration);
+			float secs2 = mainData.Extrapolate(num, (AbilityLevelSchema als) => als.effectDuration);
+			abilityUpgrade.details.AddStat("duration", GetSecondsString(secs), GetSecondsString(secs2));
+			abilityUpgrade.details.SetColumns(abilityLevel, num);
 		}
-		if (Singleton<Profile>.instance.highestUnlockedWave < int.Parse(sDFTreeNode["waveToUnlock"]))
-		{
-			flag = true;
-		}
-		else
-		{
-			EnsureProperInitialLevel(abilityID);
-		}
-		int num = Singleton<Profile>.instance.GetAbilityLevel(abilityID) + 1;
-		SDFTreeNode sDFTreeNode2 = sDFTreeNode.to(string.Format("{0:000}", num));
-		if (sDFTreeNode2 != null)
-		{
-			bool isLastUpgrade = sDFTreeNode.childCount == num;
-			StoreData.Item item = new StoreData.Item(delegate
-			{
-				LevelUpAbility(abilityID, isLastUpgrade);
-			});
-			SDFTreeNode sDFTreeNode3 = sDFTreeNode.to(string.Format("{0:000}", num - 1));
-			if (sDFTreeNode3 != null)
-			{
-				item.details.AddStat("duration", GetSecondsString(sDFTreeNode3["duration"]), GetSecondsString(sDFTreeNode2["duration"]));
-				item.details.SetColumns(num - 1, num);
-			}
-			item.id = abilityID;
-			item.icon = sDFTreeNode["icon"];
-			item.isEvent = sDFTreeNode["eventID"] != string.Empty;
-			item.locked = flag;
-			item.unlockAtWave = int.Parse(sDFTreeNode["waveToUnlock"]);
-			if (flag)
-			{
-				item.unlockCondition = string.Format(Singleton<Localizer>.instance.Get("store_unlockatwave"), item.unlockAtWave);
-			}
-			item.cost = new Cost(sDFTreeNode2["cost"], Singleton<SalesDatabase>.instance.GetSaleFor(abilityID));
-			item.title = string.Format(Singleton<Localizer>.instance.Get("store_format_upgrade_tolevel"), Singleton<Localizer>.instance.Parse(sDFTreeNode["displayName"]), num.ToString());
-			item.unlockTitle = Singleton<Localizer>.instance.Parse(sDFTreeNode["displayName"]);
-			item.details.AddSmallDescription((!sDFTreeNode.hasAttribute("desc")) ? string.Empty : sDFTreeNode["desc"]);
-			items.Add(item);
-		}
+		items.Add(abilityUpgrade);
 	}
 
 	public static void GetAbilityUpgrade_SummonLightning(string abilityID, List<StoreData.Item> items)
 	{
-		bool flag = false;
-		SDFTreeNode sDFTreeNode = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Abilities/" + abilityID);
-		if (!Singleton<EventsManager>.instance.IsEventActive(sDFTreeNode["eventID"]))
+		AbilitySchema mainData;
+		StoreData.Item abilityUpgrade = GetAbilityUpgrade(abilityID, out mainData);
+		int abilityLevel = Singleton<Profile>.Instance.GetAbilityLevel(abilityID);
+		int num = abilityLevel + 1;
+		if (num > 1)
 		{
-			return;
+			float damage = mainData.Extrapolate(abilityLevel, (AbilityLevelSchema als) => als.damage);
+			float dOTDamage = mainData.Extrapolate(abilityLevel, (AbilityLevelSchema als) => als.DOTDamage);
+			float secs = mainData.Extrapolate(abilityLevel, (AbilityLevelSchema als) => als.DOTDuration);
+			float damage2 = mainData.Extrapolate(num, (AbilityLevelSchema als) => als.damage);
+			float dOTDamage2 = mainData.Extrapolate(num, (AbilityLevelSchema als) => als.DOTDamage);
+			float secs2 = mainData.Extrapolate(num, (AbilityLevelSchema als) => als.DOTDuration);
+			abilityUpgrade.details.AddStat("strength_stats", CombineLightningDamage(damage, dOTDamage), CombineLightningDamage(damage2, dOTDamage2));
+			abilityUpgrade.details.AddStat("duration", GetSecondsString(secs), GetSecondsString(secs2));
+			abilityUpgrade.details.SetColumns(abilityLevel, num);
 		}
-		if (Singleton<Profile>.instance.highestUnlockedWave < int.Parse(sDFTreeNode["waveToUnlock"]))
-		{
-			flag = true;
-		}
-		else
-		{
-			EnsureProperInitialLevel(abilityID);
-		}
-		int num = Singleton<Profile>.instance.GetAbilityLevel(abilityID) + 1;
-		SDFTreeNode sDFTreeNode2 = sDFTreeNode.to(string.Format("{0:000}", num));
-		if (sDFTreeNode2 != null)
-		{
-			bool isLastUpgrade = sDFTreeNode.childCount == num;
-			StoreData.Item item = new StoreData.Item(delegate
-			{
-				LevelUpAbility(abilityID, isLastUpgrade);
-			});
-			SDFTreeNode sDFTreeNode3 = sDFTreeNode.to(string.Format("{0:000}", num - 1));
-			if (sDFTreeNode3 != null)
-			{
-				item.details.AddStat("strength_stats", CombineLightningDamage(sDFTreeNode3), CombineLightningDamage(sDFTreeNode2));
-				item.details.AddStat("duration", GetSecondsString(sDFTreeNode3["DOTDuration"]), GetSecondsString(sDFTreeNode2["DOTDuration"]));
-				item.details.SetColumns(num - 1, num);
-			}
-			item.id = abilityID;
-			item.icon = sDFTreeNode["icon"];
-			item.isEvent = sDFTreeNode["eventID"] != string.Empty;
-			item.locked = flag;
-			item.unlockAtWave = int.Parse(sDFTreeNode["waveToUnlock"]);
-			if (flag)
-			{
-				item.unlockCondition = string.Format(Singleton<Localizer>.instance.Get("store_unlockatwave"), item.unlockAtWave);
-			}
-			item.cost = new Cost(sDFTreeNode2["cost"], Singleton<SalesDatabase>.instance.GetSaleFor(abilityID));
-			item.title = string.Format(Singleton<Localizer>.instance.Get("store_format_upgrade_tolevel"), Singleton<Localizer>.instance.Parse(sDFTreeNode["displayName"]), num.ToString());
-			item.unlockTitle = Singleton<Localizer>.instance.Parse(sDFTreeNode["displayName"]);
-			item.details.AddSmallDescription((!sDFTreeNode.hasAttribute("desc")) ? string.Empty : sDFTreeNode["desc"]);
-			items.Add(item);
-		}
+		items.Add(abilityUpgrade);
 	}
 
 	public static void GetAbilityUpgrade_NightOfTheDead(string abilityID, List<StoreData.Item> items)
 	{
-		bool flag = false;
-		SDFTreeNode sDFTreeNode = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Abilities/" + abilityID);
-		if (!Singleton<EventsManager>.instance.IsEventActive(sDFTreeNode["eventID"]))
+		AbilitySchema mainData;
+		StoreData.Item abilityUpgrade = GetAbilityUpgrade(abilityID, out mainData);
+		int abilityLevel = Singleton<Profile>.Instance.GetAbilityLevel(abilityID);
+		int num = abilityLevel + 1;
+		if (num > 1)
 		{
-			return;
+			float secs = mainData.Extrapolate(abilityLevel, (AbilityLevelSchema als) => als.duration);
+			float secs2 = mainData.Extrapolate(num, (AbilityLevelSchema als) => als.duration);
+			abilityUpgrade.details.AddStat("duration", GetSecondsString(secs), GetSecondsString(secs2));
+			abilityUpgrade.details.SetColumns(abilityLevel, num);
 		}
-		if (Singleton<Profile>.instance.highestUnlockedWave < int.Parse(sDFTreeNode["waveToUnlock"]))
-		{
-			flag = true;
-		}
-		else
-		{
-			EnsureProperInitialLevel(abilityID);
-		}
-		int num = Singleton<Profile>.instance.GetAbilityLevel(abilityID) + 1;
-		SDFTreeNode sDFTreeNode2 = sDFTreeNode.to(string.Format("{0:000}", num));
-		if (sDFTreeNode2 != null)
-		{
-			bool isLastUpgrade = sDFTreeNode.childCount == num;
-			StoreData.Item item = new StoreData.Item(delegate
-			{
-				LevelUpAbility(abilityID, isLastUpgrade);
-			});
-			SDFTreeNode sDFTreeNode3 = sDFTreeNode.to(string.Format("{0:000}", num - 1));
-			if (sDFTreeNode3 != null)
-			{
-				item.details.AddStat("duration", GetSecondsString(sDFTreeNode3["duration"]), GetSecondsString(sDFTreeNode2["duration"]));
-				item.details.SetColumns(num - 1, num);
-			}
-			item.id = abilityID;
-			item.icon = sDFTreeNode["icon"];
-			item.isEvent = sDFTreeNode["eventID"] != string.Empty;
-			item.locked = flag;
-			item.unlockAtWave = int.Parse(sDFTreeNode["waveToUnlock"]);
-			if (flag)
-			{
-				item.unlockCondition = string.Format(Singleton<Localizer>.instance.Get("store_unlockatwave"), item.unlockAtWave);
-			}
-			item.cost = new Cost(sDFTreeNode2["cost"], Singleton<SalesDatabase>.instance.GetSaleFor(abilityID));
-			item.title = string.Format(Singleton<Localizer>.instance.Get("store_format_upgrade_tolevel"), Singleton<Localizer>.instance.Parse(sDFTreeNode["displayName"]), num.ToString());
-			item.unlockTitle = Singleton<Localizer>.instance.Parse(sDFTreeNode["displayName"]);
-			item.details.AddSmallDescription((!sDFTreeNode.hasAttribute("desc")) ? string.Empty : sDFTreeNode["desc"]);
-			items.Add(item);
-		}
+		abilityUpgrade.analyticsEvent = "UpgradePurchased";
+		abilityUpgrade.analyticsParams = new Dictionary<string, object>();
+		abilityUpgrade.analyticsParams["ItemName"] = "Ability_" + abilityUpgrade.id;
+		abilityUpgrade.analyticsParams["UpgradeLevel"] = num;
+		items.Add(abilityUpgrade);
 	}
 
-	private static string GetPercentString(string floatString)
+	public static void GetAbilityUpgrade_FlashBomb(string abilityID, List<StoreData.Item> items)
 	{
-		float num = float.Parse(floatString) * 100f;
-		return string.Format("{0}%", ((int)num).ToString());
+		AbilitySchema mainData;
+		StoreData.Item abilityUpgrade = GetAbilityUpgrade(abilityID, out mainData);
+		int abilityLevel = Singleton<Profile>.Instance.GetAbilityLevel(abilityID);
+		int num = abilityLevel + 1;
+		if (num > 1)
+		{
+			float secs = mainData.Extrapolate(abilityLevel, (AbilityLevelSchema als) => als.effectDuration);
+			float secs2 = mainData.Extrapolate(num, (AbilityLevelSchema als) => als.effectDuration);
+			abilityUpgrade.details.AddStat("duration", GetSecondsString(secs), GetSecondsString(secs2));
+			abilityUpgrade.details.AddStat("strength_stats", Mathf.RoundToInt(mainData.Extrapolate(abilityLevel, (AbilityLevelSchema als) => als.damage)).ToString(), Mathf.RoundToInt(mainData.Extrapolate(num, (AbilityLevelSchema als) => als.damage)).ToString());
+			abilityUpgrade.details.SetColumns(abilityLevel, num);
+		}
+		items.Add(abilityUpgrade);
 	}
 
-	private static string GetSecondsString(string secs)
+	public static void GetAbilityUpgrade_SetTrap(string abilityID, List<StoreData.Item> items)
 	{
-		return secs;
+		AbilitySchema mainData;
+		StoreData.Item abilityUpgrade = GetAbilityUpgrade(abilityID, out mainData);
+		int abilityLevel = Singleton<Profile>.Instance.GetAbilityLevel(abilityID);
+		int num = abilityLevel + 1;
+		if (num > 1)
+		{
+			float secs = mainData.Extrapolate(abilityLevel, (AbilityLevelSchema als) => als.effectDuration);
+			float secs2 = mainData.Extrapolate(num, (AbilityLevelSchema als) => als.effectDuration);
+			abilityUpgrade.details.AddStat("duration", GetSecondsString(secs), GetSecondsString(secs2));
+			abilityUpgrade.details.AddStat("strength_stats", Mathf.RoundToInt(mainData.Extrapolate(abilityLevel, (AbilityLevelSchema als) => als.damage)).ToString(), Mathf.RoundToInt(mainData.Extrapolate(num, (AbilityLevelSchema als) => als.damage)).ToString());
+			abilityUpgrade.details.SetColumns(abilityLevel, num);
+		}
+		items.Add(abilityUpgrade);
 	}
 
-	private static string CombineLightningDamage(SDFTreeNode data)
+	public static void GetAbilityUpgrade_Inspire(string abilityID, List<StoreData.Item> items)
 	{
-		return string.Format("{0}+{1}", data["InitalDamage"], data["DOTDamage"]);
+		AbilitySchema mainData;
+		StoreData.Item abilityUpgrade = GetAbilityUpgrade(abilityID, out mainData);
+		int abilityLevel = Singleton<Profile>.Instance.GetAbilityLevel(abilityID);
+		int num = abilityLevel + 1;
+		if (num > 1)
+		{
+			abilityUpgrade.details.SetColumns(abilityLevel, num);
+			abilityUpgrade.details.AddStat("strength_stats", Mathf.RoundToInt(mainData.Extrapolate(abilityLevel, (AbilityLevelSchema als) => als.damageMultEachTarget)).ToString(), Mathf.RoundToInt(mainData.Extrapolate(num, (AbilityLevelSchema als) => als.damageMultEachTarget)).ToString());
+		}
+		items.Add(abilityUpgrade);
+	}
+
+	private static string GetPercentString(float rawVal)
+	{
+		return string.Format("{0}%", Mathf.CeilToInt(rawVal * 100f).ToString());
+	}
+
+	private static string GetSecondsString(float secs)
+	{
+		return Mathf.RoundToInt(secs).ToString();
+	}
+
+	private static string CombineLightningDamage(float damage, float DOTDamage)
+	{
+		return string.Format("{0}+{1}", Mathf.RoundToInt(damage), Mathf.RoundToInt(DOTDamage));
 	}
 
 	private static void EnsureProperInitialLevel(string abilityID)
 	{
-		if (Singleton<Profile>.instance.GetAbilityLevel(abilityID) == 0)
+		if (Singleton<Profile>.Instance.GetAbilityLevel(abilityID) == 0)
 		{
-			Singleton<Profile>.instance.SetAbilityLevel(abilityID, Singleton<Profile>.instance.GetAbilityLevel(abilityID) + 1);
-			List<string> selectedAbilities = Singleton<Profile>.instance.GetSelectedAbilities();
-			if (selectedAbilities.Count < Singleton<Profile>.instance.maxSelectedAbilities)
-			{
-				selectedAbilities.Add(abilityID);
-				Singleton<Profile>.instance.SetSelectedAbilities(selectedAbilities);
-			}
-			Singleton<Profile>.instance.Save();
+			Singleton<Profile>.Instance.SetAbilityLevel(abilityID, 1);
+			Singleton<Profile>.Instance.Save();
 		}
 	}
 
-	private static void LevelUpAbility(string abilityID, bool isLastUpgrade)
+	private static void LevelUpAbility(Cost cost, string abilityID, bool isLastUpgrade)
 	{
-		Singleton<Profile>.instance.SetAbilityLevel(abilityID, Singleton<Profile>.instance.GetAbilityLevel(abilityID) + 1);
-		Singleton<Profile>.instance.Save();
-		Singleton<Analytics>.instance.LogEvent("AbilityUpgradePurchased", abilityID, Singleton<Profile>.instance.GetAbilityLevel(abilityID));
-		if (isLastUpgrade)
+		Singleton<Profile>.Instance.SetAbilityLevel(abilityID, Singleton<Profile>.Instance.GetAbilityLevel(abilityID) + 1);
+		Singleton<Profile>.Instance.Save();
+		if (Singleton<AbilitiesDatabase>.Instance.GlobalAbilityIDs.Contains(abilityID))
 		{
-			switch (abilityID)
+			SingletonSpawningMonoBehaviour<GluiAgent_CentralDispatch>.Instance.SendSimpleOrder("Store", StringUtils.GetStringFromStringRef("MenuFixedStrings", "store_items_global"), GluiAgentBase.Order.Redraw, null, null);
+		}
+		else
+		{
+			foreach (DataBundleRecordHandle<HeroSchema> allHero in Singleton<HeroesDatabase>.Instance.AllHeroes)
 			{
-			case "KatanaSlash":
-				SingletonMonoBehaviour<Achievements>.instance.Award("SAMUZOMBIE_ACHIEVE_MUSHASHI");
-				break;
-			case "DivineIntervention":
-				SingletonMonoBehaviour<Achievements>.instance.Award("SAMUZOMBIE_ACHIEVE_SOMEONE_UP_THERE");
-				break;
-			case "GiantWave":
-				SingletonMonoBehaviour<Achievements>.instance.Award("SAMUZOMBIE_ACHIEVE_ALL_OUT_MELEE");
-				break;
-			case "SummonTornadoes":
-				SingletonMonoBehaviour<Achievements>.instance.Award("SAMUZOMBIE_ACHIEVE_CATEGORY_5");
-				break;
-			case "Lethargy":
-				SingletonMonoBehaviour<Achievements>.instance.Award("SAMUZOMBIE_ACHIEVE_SLOTH");
-				break;
-			case "SummonLightning":
-				SingletonMonoBehaviour<Achievements>.instance.Award("SAMUZOMBIE_ACHIEVE_FROM_THE_HEAVENS");
-				break;
+				if (Array.Find(allHero.Data.Abilities, (AbilitySchema ab) => string.Equals(ab.id, abilityID)) != null)
+				{
+					SingletonSpawningMonoBehaviour<GluiAgent_CentralDispatch>.Instance.SendSimpleOrder("Store", allHero.Data.id, GluiAgentBase.Order.Redraw, null, null);
+					break;
+				}
 			}
+		}
+		AbilitySchema abilitySchema = Singleton<AbilitiesDatabase>.Instance[abilityID];
+		Singleton<Analytics>.Instance.LogEvent("AbilityUpgradePurchased", Analytics.Param("ItemName", abilityID), Analytics.Param("UpgradeLevel", Singleton<Profile>.Instance.GetAbilityLevel(abilityID)), Analytics.Param("Cost", cost.price), Analytics.Param("Currency", cost.currencyAnalyticCode), Analytics.Param("PlayerLevel", Singleton<Profile>.Instance.playerLevel));
+		if (isLastUpgrade && abilitySchema.upgradeAchievement != null && !string.IsNullOrEmpty(abilitySchema.upgradeAchievement.Key))
+		{
+			Singleton<Achievements>.Instance.SetAchievementCompletionCount(abilitySchema.upgradeAchievement.Key, 1);
+			Singleton<Achievements>.Instance.CheckMetaAchievement("AllUpgrades");
 		}
 	}
 }

@@ -3,15 +3,9 @@
 --- !u!78 &1
 TagManager:
   tags:
-  - Skybox
-  - FXBone
-  - FXRoot
-  - RailHeight
   - RailBack
   - RailFront
-  - PachBG
-  - PachinkoBall
-  - Rail
+  - RailHeight
   Builtin Layer 0: Default
   Builtin Layer 1: TransparentFX
   Builtin Layer 2: Ignore Raycast
@@ -20,9 +14,9 @@ TagManager:
   Builtin Layer 5:
   Builtin Layer 6:
   Builtin Layer 7:
-  User Layer 8:
-  User Layer 9:
-  User Layer 10:
+  User Layer 8: GLUI
+  User Layer 9: LoadingScreen
+  User Layer 10: Skybox
   User Layer 11:
   User Layer 12:
   User Layer 13:
@@ -43,4 +37,4 @@ TagManager:
   User Layer 28:
   User Layer 29:
   User Layer 30:
-  User Layer 31: SamuraiUI
+  User Layer 31:

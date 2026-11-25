@@ -2,43 +2,25 @@ using UnityEngine;
 
 public struct Cost
 {
-	public int soft;
+	public enum Currency
+	{
+		Unknown = 0,
+		Soft = 1,
+		Hard = 2,
+		Soul = 3
+	}
 
-	public int hard;
+	public Currency currency;
 
-	public int preSaleSoft;
+	public int price;
 
-	public int preSaleHard;
+	public int preSalePrice;
 
 	public bool isOnSale
 	{
 		get
 		{
-			return preSaleSoft != soft || preSaleHard != hard;
-		}
-	}
-
-	public bool canAffordWithSoft
-	{
-		get
-		{
-			if (soft == 0)
-			{
-				return false;
-			}
-			return soft <= Singleton<Profile>.instance.coins;
-		}
-	}
-
-	public bool canAffordWithHard
-	{
-		get
-		{
-			if (hard == 0)
-			{
-				return false;
-			}
-			return hard <= Singleton<Profile>.instance.gems;
+			return preSalePrice != price;
 		}
 	}
 
@@ -46,11 +28,20 @@ public struct Cost
 	{
 		get
 		{
-			if (soft == 0 && hard == 0)
+			int num = 0;
+			switch (currency)
 			{
-				return true;
+			case Currency.Soft:
+				num = Singleton<Profile>.Instance.coins;
+				break;
+			case Currency.Hard:
+				num = Singleton<Profile>.Instance.gems;
+				break;
+			case Currency.Soul:
+				num = Singleton<Profile>.Instance.souls;
+				break;
 			}
-			return canAffordWithSoft || canAffordWithHard;
+			return price <= num;
 		}
 	}
 
@@ -59,74 +50,109 @@ public struct Cost
 		get
 		{
 			float num = 1f;
-			if (soft > 0 && preSaleSoft > 0)
+			if (price > 0 && preSalePrice > 0)
 			{
-				num = (float)soft / (float)preSaleSoft;
-			}
-			else if (hard > 0 && preSaleHard > 0)
-			{
-				num = (float)hard / (float)preSaleHard;
+				num = (float)price / (float)preSalePrice;
 			}
 			return 100 - (int)(num * 100f);
 		}
 	}
 
-	public Cost(int _soft, int _hard, float salePercentage)
+	public string currencyAnalyticCode
 	{
-		salePercentage = Mathf.Clamp(salePercentage, 0f, 1f);
-		preSaleSoft = _soft;
-		preSaleHard = _hard;
-		soft = (int)((float)preSaleSoft * (1f - salePercentage));
-		hard = (int)((float)preSaleHard * (1f - salePercentage));
+		get
+		{
+			switch (currency)
+			{
+			case Currency.Soft:
+				return "SC";
+			case Currency.Hard:
+				return "HC";
+			case Currency.Soul:
+				return "SO";
+			default:
+				return "??";
+			}
+		}
 	}
 
-	public Cost(string str, float salePercentage) : this()
+	public Cost(int price, Currency currency, float salePercentage)
 	{
-		preSaleSoft = 0;
-		preSaleHard = 0;
+		salePercentage /= 100f;
+		this.currency = currency;
+		salePercentage = Mathf.Clamp(salePercentage, 0f, 1f);
+		preSalePrice = price;
+		this.price = (int)((float)preSalePrice * (1f - salePercentage));
+	}
+
+	public Cost(string str, float salePercentage)
+	{
+		salePercentage /= 100f;
+		currency = Currency.Unknown;
+		preSalePrice = 0;
+		price = 0;
 		string[] array = str.Split(',');
-		if (array != null && array.Length != 0)
+		if (array == null)
 		{
-			if (array[0].Length > 0)
-			{
-				preSaleSoft = int.Parse(array[0]);
-			}
-			if (array.Length > 1 && array[1].Length > 0)
-			{
-				preSaleHard = int.Parse(array[1]);
-			}
-			soft = (int)((float)preSaleSoft * (1f - salePercentage));
-			hard = (int)((float)preSaleHard * (1f - salePercentage));
+			return;
 		}
+		int num = 0;
+		string[] array2 = array;
+		foreach (string s in array2)
+		{
+			if (int.TryParse(s, out preSalePrice) && preSalePrice != 0)
+			{
+				switch (num)
+				{
+				case 0:
+					currency = Currency.Soft;
+					break;
+				case 1:
+					currency = Currency.Hard;
+					break;
+				case 2:
+					currency = Currency.Soul;
+					break;
+				}
+				break;
+			}
+			num++;
+		}
+		price = (int)((float)preSalePrice * (1f - salePercentage));
 	}
 
 	public override string ToString()
 	{
-		if (soft == 0 && hard == 0)
+		string empty = string.Empty;
+		if (price == 0)
 		{
 			return "Free";
 		}
-		if (soft == 0)
+		empty = price.ToString();
+		switch (currency)
 		{
-			return hard + " Gems";
-		}
-		string text = soft + " Coins";
-		if (hard > 0)
-		{
-			text = text + " or " + hard + " Gems";
+		case Currency.Soft:
+			empty += " Coins";
+			break;
+		case Currency.Hard:
+			empty += " Gems";
+			break;
+		case Currency.Soul:
+			empty += " Souls";
+			break;
 		}
 		int num = percentOff;
 		if (num != 0)
 		{
-			text += string.Format(" at {0}% off.", num);
+			empty += string.Format(" at {0}% off.", num);
 		}
-		return text;
+		return empty;
 	}
 
 	public override bool Equals(object o)
 	{
 		Cost cost = (Cost)o;
-		return soft == cost.soft && hard == cost.hard;
+		return price == cost.price && currency == cost.currency;
 	}
 
 	public override int GetHashCode()
@@ -134,10 +160,36 @@ public struct Cost
 		return ToString().GetHashCode();
 	}
 
-	public void Spend(string itemId)
+	public void Spend()
 	{
-		Singleton<Profile>.instance.coins -= soft;
-		ApplicationUtilities.GWalletBalance(-hard, itemId, "DEBIT_IN_APP_PURCHASE");
+		switch (currency)
+		{
+		case Currency.Soft:
+			Singleton<Profile>.Instance.SpendCoins(price);
+			break;
+		case Currency.Hard:
+			Singleton<Profile>.Instance.SpendGems(price);
+			break;
+		case Currency.Soul:
+			Singleton<Profile>.Instance.souls -= price;
+			break;
+		}
+		if (price <= 0)
+		{
+		}
+	}
+
+	public void gwalletSpend(Cost item, string type, string desc)
+	{
+		//switch (item.currency)
+		//{
+		//case Currency.Hard:
+		//	Singleton<Profile>.Instance.gems -= item.price;
+		//	break;
+		//case Currency.Soft:
+		//	Singleton<Profile>.Instance.coins -= item.price;
+		//	break;
+		//}
 	}
 
 	public static bool operator ==(Cost a, Cost b)

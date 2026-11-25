@@ -1,285 +1,144 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
+using Glu.Plugins.ASocial;
 using UnityEngine;
 
-public class ApplicationUtilities : MonoBehaviour
+public class ApplicationUtilities : SingletonSpawningMonoBehaviour<ApplicationUtilities>
 {
-	public enum AdPosition
-	{
-		Bottom = 1,
-		Top = 2,
-		Left = 4,
-		Right = 8,
-		Center = 0x10
-	}
-
-	public enum AdPositionCombinations
-	{
-		TopLeft = 6,
-		TopRight = 10,
-		BottomLeft = 5,
-		BottomRight = 9,
-		TopCenter = 18,
-		BottomCenter = 17,
-		RightCenter = 24,
-		LeftCenter = 20
-	}
-
-	private const string google_market_url = "market://details?id=com.glu.samuzombie";
-
-	private const string amazon_market_url = "amzn://apps/android?p=com.glu.samuzombie";
-
-	private const string google_game_sku = "SAMURAI_ZOMBIES_GOOGLE";
-
-	private const string amazon_game_sku = "SAMURAI_ZOMBIES_AMAZON";
-
-	private const string server_url_live_mask = "http://gluservices.s3.amazonaws.com/PushNotifications/{0}/notifications.txt";
-
-	private const string server_url_stage = "http://griptonite.s3.amazonaws.com/svz/android/server_notifications/";
-
-	private const string google_tj_app_id = "aebed7dc-779c-4c99-83c7-a1b6cd2c0449";
-
-	private const string amazon_tj_app_id = "f426b9b1-50f0-44ca-93c5-80e270e56702";
-
-	private const string google_tj_secret_key = "8NPEIRNflfy2dfVQGTIL";
-
-	private const string amazon_tj_secret_key = "PfbLntqseDDjeTBUqo8C";
-
-	private const string ph_amazon_token = "8c7c0730d91a429aaab28f683001eecd";
-
-	private const string ph_google_token = "31873c6e4392466284232fd9b5b6a9a5";
-
-	private const string ph_amazon_secret = "792a2ff54c0748b09f029fdf1a16f714";
-
-	private const string ph_google_secret = "cdaea7e9ab934703b28b9b1d37c090b6";
-
-	private const float DAILY_REWARDS_CHECK_TIME = 10f;
-
-	private static ApplicationUtilities This;
-
-	public bool bIsApplicationPaused;
-
-	public bool bShouldTimeoutIAPs;
-
-	private List<string> processedIDs = new List<string>();
-
-	private bool mShowGameLauchPlayHavenAds;
-
-	private static bool mFirstGameLaunch = true;
-
 	private bool mIsInitialized;
 
-	private bool mGameCenterLoggedIn;
+	private static int localNotificationDelay = 259200;
 
-	private bool mShouldPromptForInternetConnection;
+	private static string localNotificationMessage = "Placeholder! Set using ApplicationUtilities.LocalNotificationMessage";
 
-	private float mTimeTillCheckDailyRewardsAgain = 3f;
+	//private float timeScaleBackup = Time.timeScale;
 
-	public int receivedPoints;
+	public static bool _autoSave;
 
-	public static string MarketURL
+	public static bool _allowAutoSave = false;
+
+	public bool canAwardGems;
+
+	public bool isFacebookFriendsRead;
+
+	public bool isDelaySetFacebookID;
+
+	public bool isFacebookLoggedIn;
+
+	public Action<string, string, string, string> facebookOnDoneLogin;
+
+	public string post_title = string.Empty;
+
+	public string post_description = string.Empty;
+
+	public string post_imageLink = string.Empty;
+
+	public string post_link = string.Empty;
+
+	public AchievementTracker post_achievement;
+
+	public GameObject post_facebookButton;
+
+	public static bool _gameAtStartUp = true;
+
+	public static bool _restoreCloudSaveButtonPressed = false;
+
+	private SntpTime mSNTPTime;
+
+	private static Action mOnPlayHavenError;
+
+	public Action<bool> OnPause;
+
+	public static Hashtable iapPrices = new Hashtable();
+
+	public static bool HasShutdown { get; private set; }
+
+	public static bool InitializationComplete { get; private set; }
+
+	public static bool ConnectionAlertIsShown { get; private set; }
+
+	public static bool ShowConnectionErrors { get; set; }
+
+	public static bool IsPlaying { get; private set; }
+
+	public static string UserID
 	{
 		get
 		{
-			if (IsBuildType("amazon"))
-			{
-				return "amzn://apps/android?p=com.glu.samuzombie";
-			}
-			return "market://details?id=com.glu.samuzombie";
+			return SystemInfo.deviceUniqueIdentifier;
 		}
 	}
 
-	public static string GAME_SKU
+	public static DateTime Now
 	{
 		get
 		{
-			if (IsBuildType("amazon"))
-			{
-				return "SAMURAI_ZOMBIES_AMAZON";
-			}
-			return "SAMURAI_ZOMBIES_GOOGLE";
+			return SntpTime.UniversalTime;
 		}
 	}
 
-	public static string SERVER_NOTIFICATION_URL
+	public SntpTime SNTPTime
 	{
 		get
 		{
-			if (IsBuildType("amazon"))
-			{
-				if (Debug.isDebugBuild)
-				{
-					return "http://griptonite.s3.amazonaws.com/svz/android/server_notifications/amazon_sn-debug.txt";
-				}
-				return string.Format("http://gluservices.s3.amazonaws.com/PushNotifications/{0}/notifications.txt", GAME_SKU);
-			}
-			if (Debug.isDebugBuild)
-			{
-				return "http://griptonite.s3.amazonaws.com/svz/android/server_notifications/sn-debug.txt";
-			}
-			return string.Format("http://gluservices.s3.amazonaws.com/PushNotifications/{0}/notifications.txt", GAME_SKU);
+			return mSNTPTime;
 		}
 	}
 
-	public static string TJ_APP_ID
+	public static string LocalNotificationMessage
 	{
 		get
 		{
-			if (IsBuildType("amazon"))
-			{
-				return "f426b9b1-50f0-44ca-93c5-80e270e56702";
-			}
-			return "aebed7dc-779c-4c99-83c7-a1b6cd2c0449";
-		}
-	}
-
-	public static string TJ_SECRET_KEY
-	{
-		get
-		{
-			if (IsBuildType("amazon"))
-			{
-				return "PfbLntqseDDjeTBUqo8C";
-			}
-			return "8NPEIRNflfy2dfVQGTIL";
-		}
-	}
-
-	public static string lockToken
-	{
-		get
-		{
-			if (IsBuildType("amazon"))
-			{
-				return "8c7c0730d91a429aaab28f683001eecd";
-			}
-			if (IsBuildType("google"))
-			{
-				return "31873c6e4392466284232fd9b5b6a9a5";
-			}
-			return string.Empty;
-		}
-	}
-
-	public static string lockSecret
-	{
-		get
-		{
-			if (IsBuildType("amazon"))
-			{
-				return "792a2ff54c0748b09f029fdf1a16f714";
-			}
-			if (IsBuildType("google"))
-			{
-				return "cdaea7e9ab934703b28b9b1d37c090b6";
-			}
-			return string.Empty;
-		}
-	}
-
-	public static ApplicationUtilities instance
-	{
-		get
-		{
-			if (This == null)
-			{
-				GameObject gameObject = new GameObject("ApplicationUtilities", typeof(ApplicationUtilities));
-				This = gameObject.GetComponent<ApplicationUtilities>();
-				UnityEngine.Object.DontDestroyOnLoad(gameObject);
-				Screen.sleepTimeout = 0;
-				if (Debug.isDebugBuild)
-				{
-					Debug.Log("ApplicationUtilities instance");
-				}
-			}
-			return This;
-		}
-	}
-
-	public bool mustShowGameLauchPlayHavenAds
-	{
-		get
-		{
-			return mShowGameLauchPlayHavenAds || mFirstGameLaunch;
+			return localNotificationMessage;
 		}
 		set
 		{
-			mShowGameLauchPlayHavenAds = value;
-			if (!value)
-			{
-				mFirstGameLaunch = false;
-			}
+			localNotificationMessage = value;
 		}
 	}
 
-	public bool ShouldPromptForInternetConnection
+	public static int LocalNotificationDelay
 	{
 		get
 		{
-			return mShouldPromptForInternetConnection;
+			return localNotificationDelay;
 		}
 		set
 		{
-			mShouldPromptForInternetConnection = value;
+			localNotificationDelay = value;
 		}
 	}
 
-	public bool GameCenterIsLoggedIn
+	public static bool PlayHavenGameLaunchQueued { get; set; }
+
+	public static bool PausedForIAP { get; set; }
+
+	public static bool OnPlatform()
 	{
-		get
-		{
-			return mGameCenterLoggedIn;
-		}
-		set
-		{
-			mGameCenterLoggedIn = value;
-		}
+		return Application.platform == RuntimePlatform.IPhonePlayer || Application.platform == RuntimePlatform.Android;
 	}
 
-	private bool allowTapJoyVideos
+	public static void ShowInternetErrorAlert()
 	{
-		get
-		{
-			return true;
-		}
 	}
 
-	public event OnSUIBoolCallback onApplicationPause;
-
-	public event OnSUIGenericCallback onApplicationQuit;
-
-	public static bool IsBuildType(string bt)
+	public static float DeviceYSize()
 	{
-		return false;
+		return 1024f;
 	}
 
-	public int GGN_BUG()
+	public static float DeviceXSize()
 	{
-		return 0;
+		return (float)Screen.width / (float)Screen.height * DeviceYSize();
 	}
 
-	public static bool IsGWalletAvailable()
+	protected override void Awake()
 	{
-		return false;
-	}
-
-	public static void GWalletBalance(int change, string desc, string activity)
-	{
-		PlayerPrefs.SetInt("asvz.gems", Singleton<Profile>.instance.gems);
-		Singleton<Profile>.instance.gems += change;
-		Debug.Log("Added Gems: " + desc + ", " + activity);
-	}
-
-	public static bool GWalletIsSubscriberToPlan(string plan)
-	{
-		return false;
-	}
-
-	public static OnlineItemsManager.Item GWalletGetSubscriptionRecommendationAtIndex(int idx)
-	{
-		OnlineItemsManager.Item item = null;
-		return item;
+		Glu.Plugins.ASocial.Facebook.FacebookLoginHandler += onFacebookLoginComplete;
+		Glu.Plugins.ASocial.Facebook.FacebookFeedPostCompleteHandler += onFacebookFeedPostComplete;
+		base.Awake();
 	}
 
 	public void Init()
@@ -289,340 +148,420 @@ public class ApplicationUtilities : MonoBehaviour
 			return;
 		}
 		mIsInitialized = true;
-		if (Debug.isDebugBuild)
+		IsPlaying = Application.isPlaying;
+		mSNTPTime = new SntpTime();
+		ANotificationManager.Init(string.Empty);
+		AStats.Init();
+		if (PlayerPrefs.GetInt("autoSave", -1) == -1)
 		{
-			string text = SystemInfo.processorType + ", " + SystemInfo.processorCount + ", " + SystemInfo.systemMemorySize + ", " + SystemInfo.graphicsMemorySize + ", " + SystemInfo.graphicsDeviceName + ", " + SystemInfo.graphicsDeviceVendor + ", " + SystemInfo.graphicsDeviceID + ", " + SystemInfo.graphicsDeviceVendorID + ", " + SystemInfo.graphicsDeviceVersion + ", " + SystemInfo.graphicsShaderLevel + ", " + SystemInfo.graphicsPixelFillrate + ", " + SystemInfo.deviceName + ", " + SystemInfo.deviceModel;
-			Debug.Log(string.Concat("SystemInfo: ", text, "\nDefault Quality Level: ", QualitySettings.currentLevel, "\nShader.globalMaximumLOD: ", Shader.globalMaximumLOD, "\nQualitySettings.antiAliasing: ", QualitySettings.antiAliasing));
-			if (IsBuildType("amazon"))
-			{
-				Debug.Log("AMAZON build");
-			}
-			else if (IsBuildType("google"))
-			{
-				Debug.Log("GOOGLE build");
-			}
-			else
-			{
-				Debug.Log("? build");
-			}
+			PlayerPrefs.SetInt("autoSave", 1);
 		}
-		Singleton<Analytics>.instance.LogEvent("CoinsOnStartup", Singleton<Profile>.instance.coins.ToString());
-		Singleton<Analytics>.instance.LogEvent("GemsOnStartup", Singleton<Profile>.instance.gems.ToString());
+		Glu.Plugins.ASocial.Facebook.Init();
+		if (AJavaTools.Properties.IsBuildAmazon())
+		{
+			Amazon.Init((Amazon.GameCircleFeatures)6);
+		}
 		StartCoroutine(Init3rdPartyPlugins());
-		PushNotification(false);
-	}
-
-	public void IAPSyncTransactions()
-	{
+		isDelaySetFacebookID = PlayerPrefs.GetInt("DELAY_SET_FACEBOOK_ID") == 1;
+		isFacebookLoggedIn = Glu.Plugins.ASocial.Facebook.IsLoggedIn();
 	}
 
 	private IEnumerator Init3rdPartyPlugins()
 	{
-		if (Application.platform == RuntimePlatform.IPhonePlayer)
+		if (!GeneralConfig.IsLive)
 		{
-			if (Debug.isDebugBuild)
-			{
-				Debug.Log("Initalizing ApplicationUtilities");
-			}
 		}
-		else if (Application.platform == RuntimePlatform.Android)
+		Singleton<Analytics>.Instance.ApplicationStart();
+		PlayHavenGameLaunchQueued = true;
+		if (Amazon.IsSignedIn())
 		{
-			if (Debug.isDebugBuild)
-			{
-				Debug.Log("Initalizing ApplicationUtilities");
-			}
-			if (Debug.isDebugBuild)
-			{
-				Debug.Log("SERVER_NOTIFICATION_URL = " + SERVER_NOTIFICATION_URL);
-			}
+			Singleton<Achievements>.Instance.OnLogin();
 		}
-		yield return null;
+		AStats.MobileAppTracking.Init();
+		mSNTPTime.UpdateTimeOffset();
+		InitializationComplete = true;
+		yield break;
 	}
 
-	public void ShowAchievments()
+	public static void StoreOpened()
 	{
+		MakePlayHavenContentRequest("bank_launch");
 	}
 
-	public void PromptGameCenterLogin()
+	public static void MakePlayHavenContentRequest(string requestType)
 	{
+		MakePlayHavenContentRequest(requestType, null);
+	}
+
+	public static void MakePlayHavenContentRequest(string requestType, Action onError)
+	{
+		if (GeneralConfig.PlayHavenEnabled)
+		{
+			if (requestType == "game_launch")
+			{
+				PlayHavenGameLaunchQueued = false;
+			}
+		}
 	}
 
 	private void OnApplicationPause(bool state)
 	{
-		if (Debug.isDebugBuild)
-		{
-			Debug.Log("OnApplicationPause: " + state);
-		}
-		if (this.onApplicationPause != null)
-		{
-			this.onApplicationPause(state);
-		}
 		if (!state)
 		{
-			if (Application.platform == RuntimePlatform.IPhonePlayer)
+			if (Application.platform == RuntimePlatform.IPhonePlayer || Application.platform == RuntimePlatform.Android)
 			{
-				Singleton<Analytics>.instance.LogEvent("CoinsOnResume", Singleton<Profile>.instance.coins.ToString());
-				Singleton<Analytics>.instance.LogEvent("GemsOnResume", Singleton<Profile>.instance.gems.ToString());
-				if (Debug.isDebugBuild)
+				if (GeneralConfig.PlayHavenEnabled && !PausedForIAP)
 				{
-					Debug.Log("Game is being launched/resumed from the background, Sending game_launch from ApplicationUtilities::OnApplicationPause()");
+					PlayHavenGameLaunchQueued = true;
 				}
-				mShowGameLauchPlayHavenAds = true;
-				TapjoyInterface.OnResume();
-				PushNotification(false);
-				StartCoroutine(CheckVersion());
+				if (SingletonSpawningMonoBehaviour<GluIap>.Exists && !PausedForIAP)
+				{
+					SingletonSpawningMonoBehaviour<GluIap>.Instance.UpdateProductData();
+				}
+				Singleton<Analytics>.Instance.ApplicationResume();
+				ANotificationManager.ClearActiveNotifications();
+				StringUtils.ClearCultureInfo();
 			}
-			else if (Application.platform == RuntimePlatform.Android)
-			{
-				if (Singleton<Profile>.instance.tutorialIsComplete)
-				{
-					if (Debug.isDebugBuild)
-					{
-						Debug.Log("Game is being launched/resumed from the background, Sending game_launch from ApplicationUtilities::OnApplicationPause()");
-					}
-					mShowGameLauchPlayHavenAds = true;
-					StartCoroutine(CheckVersion());
-				}
-				instance.IAPSyncTransactions();
-				if (PurchaseCurrencyDialog.instance != null)
-				{
-					PurchaseCurrencyDialog.instance.startTime = Time.realtimeSinceStartup;
-					PurchaseCurrencyDialog.instance.m_onResume = true;
-				}
-				Singleton<Analytics>.instance.StartSession();
-				bIsApplicationPaused = state;
-				StartCoroutine(CheckForTJPoints());
-			}
-			PushNotification(false);
 		}
 		else
 		{
-			Singleton<Analytics>.instance.LogEvent("CoinsOnSuspend", Singleton<Profile>.instance.coins.ToString());
-			Singleton<Analytics>.instance.LogEvent("GemsOnSuspend", Singleton<Profile>.instance.gems.ToString());
-			Singleton<Analytics>.instance.LogEvent("CurrentLevelOnSuspend", UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
-			PushNotification(true);
-			Singleton<Analytics>.instance.EndSession();
-			bIsApplicationPaused = state;
-			if (Singleton<Profile>.IsAlive())
+			Singleton<Analytics>.Instance.ApplicationPause();
+			if (mSNTPTime != null)
 			{
-				Singleton<Profile>.instance.Update();
+				mSNTPTime.UpdateTimeOffset();
+			}
+			if (AJavaTools.Properties.IsBuildAmazon())
+			{
+				Amazon.SyncOnExit();
 			}
 		}
-	}
-
-	private IEnumerator CheckVersion()
-	{
-		WWW www = (IsBuildType("amazon") ? ((!Debug.isDebugBuild) ? new WWW(Singleton<Localizer>.instance.Get("amazon_version_file_location_live")) : new WWW(Singleton<Localizer>.instance.Get("amazon_version_file_location_stage"))) : ((!Debug.isDebugBuild) ? new WWW(Singleton<Localizer>.instance.Get("version_file_location_live")) : new WWW(Singleton<Localizer>.instance.Get("version_file_location_stage"))));
-		yield return www;
-		if (Application.internetReachability == NetworkReachability.NotReachable)
+		if (OnPause != null)
 		{
-			yield break;
-		}
-		Singleton<Profile>.instance.latestDetectedOnlineVersion = www.text;
-		if (!string.IsNullOrEmpty(Singleton<Profile>.instance.latestDetectedOnlineVersion))
-		{
-			string[] version = Singleton<Profile>.instance.latestDetectedOnlineVersion.Split('.');
-			if (version.Length >= 3 && (Singleton<GameVersion>.instance.major < int.Parse(version[0]) || (Singleton<GameVersion>.instance.major == int.Parse(version[0]) && Singleton<GameVersion>.instance.minor < int.Parse(version[1])) || (Singleton<GameVersion>.instance.major == int.Parse(version[0]) && Singleton<GameVersion>.instance.minor == int.Parse(version[1]) && Singleton<GameVersion>.instance.revision < int.Parse(version[2]))) && UnityEngine.SceneManagement.SceneManager.GetActiveScene().name != "MainMenu")
-			{
-				UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
-			}
-		}
-	}
-
-	private void CheckForDailyReward()
-	{
-		Profile profile = Singleton<Profile>.instance;
-		DateTime now = DateTime.Now;
-		if (profile.lastYearPlayed == 0 || profile.lastMonthPlayed == 0 || profile.lastDayPlayed == 0)
-		{
-			profile.lastYearPlayed = now.Year;
-			profile.lastMonthPlayed = now.Month;
-			profile.lastDayPlayed = now.Day;
-		}
-		DateTime value = new DateTime(profile.lastYearPlayed, profile.lastMonthPlayed, profile.lastDayPlayed);
-		TimeSpan timeSpan = now.Subtract(value);
-		if (timeSpan.Days == 1)
-		{
-			if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex != 0)
-			{
-				UnityEngine.SceneManagement.SceneManager.LoadScene("MainMenu");
-			}
-		}
-		else if (timeSpan.Days > 1)
-		{
-			profile.currentDailyRewardNumber = 0;
-			profile.Save();
-			profile.lastYearPlayed = now.Year;
-			profile.lastMonthPlayed = now.Month;
-			profile.lastDayPlayed = now.Day;
-		}
-	}
-
-	private void Update()
-	{
-		mTimeTillCheckDailyRewardsAgain -= Time.deltaTime;
-		if (mTimeTillCheckDailyRewardsAgain <= 0f && WeakGlobalSceneBehavior<InGameImpl>.instance != null)
-		{
-			if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().name == "Store")
-			{
-				CheckForDailyReward();
-			}
-			StartCoroutine(CheckVersion());
-			mTimeTillCheckDailyRewardsAgain = 10f;
-		}
-		Singleton<Profile>.instance.ConvertLocalGemsToGWallet();
-		if (Singleton<Profile>.IsAlive())
-		{
-			Singleton<Profile>.instance.Update();
+			OnPause(state);
 		}
 	}
 
 	private void FixedUpdate()
 	{
-		TapjoyInterface.Update();
-	}
-
-	private void OnDestroy()
-	{
-		DestroyPlugins();
-		Singleton<Analytics>.instance.LogEvent("CoinsOnExit", PlayerPrefs.GetInt("asvz.coins").ToString());
-		Singleton<Analytics>.instance.LogEvent("GemsOnExit", PlayerPrefs.GetInt("asvz.gems").ToString());
-	}
-
-	private void OnApplicationQuit()
-	{
-		Singleton<Analytics>.instance.LogEvent("CurrentLevelOnQuit", UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
-		if (this.onApplicationQuit != null)
+		if (DataBundleRuntime.Instance != null && DataBundleRuntime.Instance.Initialized && isDelaySetFacebookID && GripNetwork.Ready)
 		{
-			this.onApplicationQuit();
+			Singleton<Profile>.Instance.MultiplayerData.DelayedGamespyUpdate();
+			PlayerPrefs.SetInt("DELAY_SET_FACEBOOK_ID", 0);
+			isDelaySetFacebookID = false;
 		}
-		DestroyPlugins();
-		Singleton<Analytics>.instance.EndSession();
-		UnityEngine.Object.Destroy(base.gameObject);
-		PushNotification(true);
-	}
-
-	public void DestroyPlugins()
-	{
-	}
-
-	public bool OnPlatform()
-	{
-		return Application.platform == RuntimePlatform.IPhonePlayer;
-	}
-
-	public bool OnInternet()
-	{
-		return Application.internetReachability != NetworkReachability.NotReachable;
-	}
-
-	public void ShowAds(AdPosition adPosition)
-	{
-	}
-
-	public void ShowAds(int x, int y)
-	{
-	}
-
-	public void HideAds()
-	{
-	}
-
-	public void PrecacheAd()
-	{
-	}
-
-	public bool IsAdOpen()
-	{
-		return false;
-	}
-
-	private void OnPlayerLoggedIn()
-	{
-	}
-
-	private void OnPlayerFailedToLogin(string action)
-	{
-		GameCenterIsLoggedIn = false;
-		Singleton<Profile>.instance.profileName = "Guest";
-	}
-
-	private void OnPlayerLoggedOut()
-	{
-	}
-
-	private void PushNotification(bool state)
-	{
-	}
-
-	private void SaveTimeStampAndPushNotification()
-	{
-		Singleton<Profile>.instance.timeStamp = Time.time;
-		Singleton<Profile>.instance.Save();
-		int time = 86400;
-	}
-
-	private void onBillingSupported(string supported)
-	{
-		Debug.Log("Unity: onBillingSupported: " + supported);
-	}
-
-	private void onSubscriptionSupported(string supported)
-	{
-		Debug.Log("Unity: onSubscriptionSupported: " + supported);
-	}
-
-	private void onGetUserIdResponse(string userID)
-	{
-		Debug.Log("Unity: onGetUserIdResponse: " + userID);
-	}
-
-	private void onPurchaseStateChange(string response)
-	{
-	}
-
-	private void onRequestPurchaseResponse(string response)
-	{
-	}
-
-	private void onRestoreTransactionsResponse(string response)
-	{
-		Debug.Log("onRestoreTransactionsResponse: " + response);
-		if (response.Equals("RESULT_OK") || response.Equals("SUCCESSFUL"))
+		if (DataBundleRuntime.Instance != null && DataBundleRuntime.Instance.Initialized && !isFacebookFriendsRead && isFacebookLoggedIn && GripNetwork.Ready)
 		{
-			Debug.Log("TODO HANDLE RESTORE TRANSACTIONS SUCCESSFUL");
+			AndroidFacebookFriendsRead();
+		}
+	}
+
+	protected override void OnDestroy()
+	{
+		Glu.Plugins.ASocial.Facebook.FacebookLoginHandler -= onFacebookLoginComplete;
+		Glu.Plugins.ASocial.Facebook.FacebookFeedPostCompleteHandler -= onFacebookFeedPostComplete;
+		base.OnDestroy();
+	}
+
+	protected override void OnApplicationQuit()
+	{
+		OnApplicationPause(true);
+		HasShutdown = true;
+		if (Singleton<Profile>.Instance != null)
+		{
+			Singleton<Profile>.Instance.FlurrySession.ReportSessionEnd();
+		}
+		Singleton<Analytics>.Instance.ApplicationExit();
+		GluIap instance = SingletonSpawningMonoBehaviour<GluIap>.Instance;
+		instance.OnStateChange = (Action<ICInAppPurchase.TRANSACTION_STATE, string, bool>)Delegate.Remove(instance.OnStateChange, new Action<ICInAppPurchase.TRANSACTION_STATE, string, bool>(OnIAPStateChange));
+		Logging.Destroy();
+		base.OnApplicationQuit();
+	}
+
+	private void OnIAPStateChange(ICInAppPurchase.TRANSACTION_STATE state, string productID, bool fromVGP)
+	{
+		if (OnPlatform())
+		{
+		}
+	}
+
+	private void onGWalletBillingRecommendationsChanged()
+	{
+		if (SingletonSpawningMonoBehaviour<GluIap>.Instance != null)
+		{
+			SingletonSpawningMonoBehaviour<GluIap>.Instance.refreshRecommendations();
+		}
+	}
+
+	private void onGWalletBalanceChanged()
+	{
+	}
+
+	private void onFacebookLoginComplete(object sender, FacebookEventArgs args)
+	{
+		if (args.GetStatus() == FacebookEventArgs.FaceBookLoginStatus.Success)
+		{
+			GameObject gameObject = GameObject.Find("Button_FaceBook");
+			if (gameObject != null)
+			{
+				UnityEngine.Object.Destroy(gameObject);
+			}
+			StartCoroutine(onFacebookLoginTasks());
+		}
+		else if (args.GetStatus() != FacebookEventArgs.FaceBookLoginStatus.Cancelled && args.GetStatus() != FacebookEventArgs.FaceBookLoginStatus.Failed)
+		{
+		}
+	}
+
+	private void onFacebookFeedPostComplete(object sender, FacebookFeedEventArgs args)
+	{
+		if (args.GetStatus() != FacebookFeedEventArgs.FacebookFeedStatus.Success && args.GetStatus() != FacebookFeedEventArgs.FacebookFeedStatus.Cancelled && args.GetStatus() != FacebookFeedEventArgs.FacebookFeedStatus.Failed)
+		{
+		}
+	}
+
+	public void AndroidFacebookFriendsRead()
+	{
+		try
+		{
+			string text = "facebookid IN (";
+			int num = 0;
+			List<Dictionary<string, string>> friends = Glu.Plugins.ASocial.Facebook.GetFriendsWithApp();
+			foreach (Dictionary<string, string> item in friends)
+			{
+				if (num > 0)
+				{
+					text += ", ";
+				}
+				text = text + "'" + item["uid"] + "'";
+				num++;
+			}
+			text += ")";
+			string[] fieldNames = new string[3] { "ownerid", "gamecenterid", "facebookid" };
+			GripNetwork.SearchRecords("UserData", fieldNames, text, string.Empty, null, num, 1, delegate(GripNetwork.Result result, GripField[,] data)
+			{
+				if (result == GripNetwork.Result.Success && data != null)
+				{
+					for (int i = 0; i < data.GetLength(0); i++)
+					{
+						if (data[i, 0].mInt.HasValue)
+						{
+							string friendName = string.Empty;
+							foreach (Dictionary<string, string> item2 in friends)
+							{
+								if (item2["uid"] == data[i, 2].mString)
+								{
+									friendName = item2["name"];
+									break;
+								}
+							}
+							Singleton<Profile>.Instance.MultiplayerData.AddFriend(data[i, 0].mInt.Value, data[i, 1].mString, data[i, 2].mString, friendName, true);
+						}
+					}
+				}
+				else if (data != null)
+				{
+				}
+			});
+			isFacebookFriendsRead = true;
+		}
+		catch (Exception)
+		{
+		}
+	}
+
+	public void AndroidFacebookFeed(string title, string description, GameObject facebookButton, string link = "", string imageLink = "", AchievementTracker sharingAchievement = null)
+	{
+		if (Application.internetReachability == NetworkReachability.NotReachable)
+		{
+			MultiplayerData.NetworkRequiredDialog();
+		}
+		if (link == string.Empty)
+		{
+			link = MultiplayerData.FacebookLink;
+		}
+		if (imageLink == string.Empty)
+		{
+			imageLink = MultiplayerData.FacebookImageLink;
+		}
+		if (Glu.Plugins.ASocial.Facebook.IsLoggedIn())
+		{
+			Dictionary<Glu.Plugins.ASocial.Facebook.FeedType, string> dictionary = new Dictionary<Glu.Plugins.ASocial.Facebook.FeedType, string>();
+			dictionary.Add(Glu.Plugins.ASocial.Facebook.FeedType.Name, title);
+			dictionary.Add(Glu.Plugins.ASocial.Facebook.FeedType.Description, description);
+			dictionary.Add(Glu.Plugins.ASocial.Facebook.FeedType.Picture, imageLink);
+			dictionary.Add(Glu.Plugins.ASocial.Facebook.FeedType.Link, link);
+			Dictionary<Glu.Plugins.ASocial.Facebook.FeedType, string> parameters = dictionary;
+			Glu.Plugins.ASocial.Facebook.Post(parameters);
+			if (facebookButton != null)
+			{
+				facebookButton.SetActive(false);
+			}
+			if (sharingAchievement != null)
+			{
+				sharingAchievement.shared = true;
+			}
 		}
 		else
 		{
-			Debug.Log("TODO HANDLE RESTORE TRANSACTIONS FAILED");
+			post_title = title;
+			post_description = description;
+			post_imageLink = imageLink;
+			post_link = link;
+			post_facebookButton = facebookButton;
+			post_achievement = sharingAchievement;
+			AndroidFacebookLogIn(PostAfterLoginSuccess);
 		}
 	}
 
-	private void onTapjoyPointsReceived(string info)
+	public void AndroidGoogleFriendsRead()
 	{
 	}
 
-	private void onCustomTap(string info)
+	public void AndroidFacebookLogIn(Action<string, string, string, string> onDone = null)
 	{
-		string[] array = info.Split('|');
-		string text = array[0];
-		string text2 = array[1];
-		float num = float.Parse(array[2]);
-		float num2 = float.Parse(array[3]);
-		Debug.Log("Unity: onCustomTap [" + text + "] " + text2 + " at (" + num + "," + num2 + ")");
+		if (onDone != null)
+		{
+			facebookOnDoneLogin = onDone;
+		}
+		Glu.Plugins.ASocial.Facebook.Login();
 	}
 
-	private void onBrandBoostItemReady(string itemKey)
+	private void PostAfterLoginSuccess(string title, string description, string link, string imageLink)
 	{
-		Debug.Log("Unity: onBrandBoostItemReady: " + itemKey);
+		Dictionary<Glu.Plugins.ASocial.Facebook.FeedType, string> dictionary = new Dictionary<Glu.Plugins.ASocial.Facebook.FeedType, string>();
+		dictionary.Add(Glu.Plugins.ASocial.Facebook.FeedType.Name, title);
+		dictionary.Add(Glu.Plugins.ASocial.Facebook.FeedType.Description, description);
+		dictionary.Add(Glu.Plugins.ASocial.Facebook.FeedType.Picture, imageLink);
+		dictionary.Add(Glu.Plugins.ASocial.Facebook.FeedType.Link, link);
+		Dictionary<Glu.Plugins.ASocial.Facebook.FeedType, string> parameters = dictionary;
+		Glu.Plugins.ASocial.Facebook.Post(parameters);
+		if ((bool)post_facebookButton)
+		{
+			post_facebookButton.SetActive(false);
+		}
+		if (post_achievement != null)
+		{
+			post_achievement.shared = true;
+		}
 	}
 
-	private IEnumerator CheckForTJPoints()
+
+	public void awardTapjoy(int amount)
 	{
-		yield break;
 	}
 
-	private void onPlayHavenShouldMakePurchase(string info)
+	public void performAutoSave()
 	{
+	}
+
+	public byte[] readSaveFile(string path)
+	{
+		using (FileStream fileStream = new FileStream(path, FileMode.Open, FileAccess.Read))
+		{
+			using (BinaryReader binaryReader = new BinaryReader(fileStream))
+			{
+				return binaryReader.ReadBytes((int)fileStream.Length);
+			}
+		}
+	}
+
+	public void writeSaveFile(string path, byte[] data)
+	{
+		using (FileStream output = new FileStream(path, FileMode.Create, FileAccess.Write))
+		{
+			using (BinaryWriter binaryWriter = new BinaryWriter(output))
+			{
+				binaryWriter.Write(data);
+			}
+		}
+	}
+
+	private void onCloudLoadSuccess(object sender, EventArgs args)
+	{
+	}
+
+	private void onCloudConflict(object sender, EventArgs args)
+	{
+		AJavaTools.UI.ShowAlert(base.gameObject.name, "onCloudLoadConflictPopup", StringUtils.GetStringFromStringRef("LocalizedStrings", "IDS_SAVE_GAME_CONFLICT_TITLE"), StringUtils.GetStringFromStringRef("LocalizedStrings", "IDS_SAVE_GAME_CONFLICT_DESC"), StringUtils.GetStringFromStringRef("LocalizedStrings", "IDS_ICLOUD_ANDROID"), StringUtils.GetStringFromStringRef("LocalizedStrings", "IDS_LOCAL"), string.Empty);
+	}
+
+	private void onCloudLoadNoData(object sender, EventArgs args)
+	{
+		if (_restoreCloudSaveButtonPressed)
+		{
+			SingletonSpawningMonoBehaviour<GluiPersistentDataCache>.Instance.Save("TEXT_POPUP_GENERIC", "LocalizedStrings.icloud_file_not_found_notification_message_text");
+			SingletonSpawningMonoBehaviour<GluiPersistentDataCache>.Instance.Save("TEXT_POPUP_GENERIC_BTN", "MenuFixedStrings.ok");
+			GluiActionSender.SendGluiAction("ALERT_BLOCK_INPUT", base.gameObject, null);
+		}
+		_restoreCloudSaveButtonPressed = false;
+	}
+
+	private void onCloudLoadConflictPopup(string info)
+	{
+		int num = Convert.ToInt32(info);
+		_restoreCloudSaveButtonPressed = false;
+		switch (num)
+		{
+		case -1:
+			AJavaTools.UI.ShowAlert(base.gameObject.name, "onGameResetPopup", StringUtils.GetStringFromStringRef("LocalizedStrings", "IDS_RESTORE_GAME_TITLE"), StringUtils.GetStringFromStringRef("LocalizedStrings", "IDS_ICLOUD_SAVE_FILE_SUCCESSFULLY_LOADED_ANDROID") + "\n\n" + StringUtils.GetStringFromStringRef("LocalizedStrings", "IDS_GAME_RESTARTED"), StringUtils.GetStringFromStringRef("LocalizedStrings", "IDS_RESTART"), StringUtils.GetStringFromStringRef("LocalizedStrings", "cancel"), string.Empty);
+			break;
+		}
+	}
+
+	private void onGameResetPopup(string info)
+	{
+	}
+
+	private void onGPGS_SignInSuccess(object sender, EventArgs args)
+	{
+	}
+
+	private void onGPGS_SignOutSuccess(object sender, EventArgs args)
+	{
+		if (StartScreenImpl._leaderboardsButton != null && StartScreenImpl._achievementsButton != null && StartScreenImpl._googlePlusButton != null)
+		{
+			StartScreenImpl._leaderboardsButton.gameObject.SetActive(false);
+			StartScreenImpl._achievementsButton.gameObject.SetActive(false);
+			StartScreenImpl._iCloudButton.gameObject.SetActive(false);
+			StartScreenImpl._googlePlusButton.gameObject.SetActive(true);
+		}
+	}
+
+	private void onGPGS_FriendsLoaded(object sender, EventArgs args)
+	{
+		SingletonSpawningMonoBehaviour<ApplicationUtilities>.Instance.AndroidGoogleFriendsRead();
+	}
+
+	private void onGPGS_ConnectionToPGSFailed(object sender, EventArgs args)
+	{
+	}
+
+	private IEnumerator onFacebookLoginTasks()
+	{
+		float seconds = 5f;
+		yield return new WaitForSeconds(seconds);
+		try
+		{
+			if (Singleton<Profile>.Instance.MultiplayerData.FacebookID != Glu.Plugins.ASocial.Facebook.GetID())
+			{
+				Singleton<Profile>.Instance.MultiplayerData.SetFacebookID(Glu.Plugins.ASocial.Facebook.GetID());
+			}
+		}
+		catch (Exception)
+		{
+		}
+		if (facebookOnDoneLogin != null)
+		{
+			try
+			{
+				facebookOnDoneLogin(post_title, post_description, post_link, post_imageLink);
+			}
+			catch (Exception ex)
+			{
+				Exception e = ex;
+			}
+			facebookOnDoneLogin = null;
+		}
+		yield return null;
 	}
 }

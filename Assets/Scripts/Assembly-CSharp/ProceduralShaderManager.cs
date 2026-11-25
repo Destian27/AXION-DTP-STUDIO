@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 public class ProceduralShaderManager : WeakGlobalInstance<ProceduralShaderManager>
@@ -12,16 +13,16 @@ public class ProceduralShaderManager : WeakGlobalInstance<ProceduralShaderManage
 
 	public void update()
 	{
-		for (int i = 0; i < mEvents.Count; i++)
+		int num = 0;
+		while (num < mEvents.Count)
 		{
-			if (mEvents[i].shouldDie)
+			if (mEvents[num].shouldDie)
 			{
-				mEvents.RemoveAt(i);
+				mEvents.RemoveAt(num);
+				continue;
 			}
-			else
-			{
-				mEvents[i].resetToBaseValues();
-			}
+			mEvents[num].resetToBaseValues();
+			num++;
 		}
 		foreach (ShaderEvent mEvent in mEvents)
 		{
@@ -31,6 +32,31 @@ public class ProceduralShaderManager : WeakGlobalInstance<ProceduralShaderManage
 
 	public static void postShaderEvent(ShaderEvent shaderEvent)
 	{
-		WeakGlobalInstance<ProceduralShaderManager>.instance.mEvents.Add(shaderEvent);
+		if (WeakGlobalInstance<ProceduralShaderManager>.Instance != null)
+		{
+			WeakGlobalInstance<ProceduralShaderManager>.Instance.mEvents.Add(shaderEvent);
+		}
+	}
+
+	public static void StopShaderEvents(Predicate<ShaderEvent> shouldStop)
+	{
+		if (WeakGlobalInstance<ProceduralShaderManager>.Instance == null || shouldStop == null)
+		{
+			return;
+		}
+		int num = 0;
+		while (num < WeakGlobalInstance<ProceduralShaderManager>.Instance.mEvents.Count)
+		{
+			ShaderEvent shaderEvent = WeakGlobalInstance<ProceduralShaderManager>.Instance.mEvents[num];
+			if (shouldStop(shaderEvent))
+			{
+				shaderEvent.resetToBaseValues();
+				WeakGlobalInstance<ProceduralShaderManager>.Instance.mEvents.RemoveAt(num);
+			}
+			else
+			{
+				num++;
+			}
+		}
 	}
 }

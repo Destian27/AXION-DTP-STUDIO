@@ -5,4 +5,6 @@ public class CollectedPresent
 	public string contents = string.Empty;
 
 	public bool hasBeenOpened;
+
+	public int amount = 1;
 }

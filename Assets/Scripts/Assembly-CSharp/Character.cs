@@ -4,6 +4,34 @@ using UnityEngine;
 
 public class Character : Weakable
 {
+	private struct HealthTextInfo
+	{
+		public float lifetime;
+
+		public GameObject obj;
+
+		public HealthTextInfo(GameObject o)
+		{
+			obj = o;
+			lifetime = 0f;
+		}
+	}
+
+	private struct BuffInfo
+	{
+		public float percentDamageToAdd;
+
+		public float speedModifier;
+
+		public float duration;
+
+		public object source;
+
+		public GameObject effect;
+	}
+
+	public delegate float ExplosionRangeDelegate();
+
 	private const float kAutoRecoveryDelay = 2f;
 
 	private const float kImpactPauseTime = 0.12f;
@@ -18,7 +46,9 @@ public class Character : Weakable
 
 	private const float kLeniencyTreshold = 0.1f;
 
-	private const float kExplosionRange = 250f;
+	private const float kExplosionRange = 2.5f;
+
+	protected const float kKnockbackTime = 0.5f;
 
 	private const float kMaxHealthPercentToPreferFrontLine = 0.4f;
 
@@ -26,11 +56,25 @@ public class Character : Weakable
 
 	private const float kCloseDistRange = 35f;
 
+	public ExplosionRangeDelegate explosionRange = () => 2.5f;
+
+	private static GameObjectPool sObjectPool = new GameObjectPool();
+
+	private List<HealthTextInfo> healthTextObjects = new List<HealthTextInfo>();
+
+	private Camera mObjectCamera;
+
+	private Camera mGluiCamera;
+
+	private bool? mAcceptsBuffs;
+
+	private bool mActive = true;
+
+	private float mSpeedBuffModifier = 1f;
+
 	private CharacterModelController mCtrl;
 
 	private CharacterStats mStats;
-
-	private MiniHealthBar mHealthBar;
 
 	private float mMeleeAttackDelay;
 
@@ -58,6 +102,8 @@ public class Character : Weakable
 
 	private GameObject mPaperDollRangedWeapon;
 
+	protected List<MeleeWeaponTrail> mMeleeWeaponTrail;
+
 	protected bool mHasDOT;
 
 	protected float mDOTdamage;
@@ -68,11 +114,19 @@ public class Character : Weakable
 
 	protected float mDOTcurrentTime;
 
-	protected bool mHasSpeedSnare;
+	protected float mDOTpauseTime;
 
-	protected float mSpeedSnareDuration;
+	protected Color? mDOTColorTint;
 
-	protected float mDamageBuffDuration;
+	protected Character mDOTAttacker;
+
+	protected bool supportColorFlash = true;
+
+	protected Dictionary<int, Color> mOriginalMaterialColors = new Dictionary<int, Color>(3);
+
+	private List<BuffInfo> mBuffReceievedInfos = new List<BuffInfo>();
+
+	private bool mBuffChanged;
 
 	protected float mDamageBuffPercent;
 
@@ -82,6 +136,22 @@ public class Character : Weakable
 
 	private string[] kMeleeJointIDs = new string[2] { "melee_weapon", "melee_weapon_2" };
 
+	protected bool mIsLeftToRightGameplay = true;
+
+	public Transform transform { get; private set; }
+
+	public bool acceptsBuffs
+	{
+		get
+		{
+			if (!mAcceptsBuffs.HasValue)
+			{
+				mAcceptsBuffs = !isPlayer && !isBase;
+			}
+			return mAcceptsBuffs.Value;
+		}
+	}
+
 	public BuffIconClient buffIcon
 	{
 		get
@@ -89,6 +159,47 @@ public class Character : Weakable
 			return mBuffIconClient;
 		}
 	}
+
+	public Dictionary<int, Color> OriginalMaterialColors
+	{
+		get
+		{
+			if (mOriginalMaterialColors.Count <= 0)
+			{
+				SkinnedMeshRenderer[] componentsInChildren = controlledObject.GetComponentsInChildren<SkinnedMeshRenderer>();
+				SkinnedMeshRenderer[] array = componentsInChildren;
+				foreach (SkinnedMeshRenderer skinnedMeshRenderer in array)
+				{
+					if (skinnedMeshRenderer != null)
+					{
+						Material material = skinnedMeshRenderer.material;
+						int instanceID = material.GetInstanceID();
+						Color value = (material.HasProperty("_RimColor") ? material.GetColor("_RimColor") : (material.HasProperty("_Color") ? material.GetColor("_Color") : ((!material.HasProperty("_MainColor")) ? Color.white : material.GetColor("_MainColor"))));
+						mOriginalMaterialColors[instanceID] = value;
+					}
+				}
+				MeshRenderer[] componentsInChildren2 = controlledObject.GetComponentsInChildren<MeshRenderer>();
+				MeshRenderer[] array2 = componentsInChildren2;
+				foreach (MeshRenderer meshRenderer in array2)
+				{
+					if (meshRenderer != null)
+					{
+						Material material2 = meshRenderer.material;
+						int instanceID2 = material2.GetInstanceID();
+						Color value2 = (material2.HasProperty("_RimColor") ? material2.GetColor("_RimColor") : (material2.HasProperty("_Color") ? material2.GetColor("_Color") : ((!material2.HasProperty("_MainColor")) ? Color.white : material2.GetColor("_MainColor"))));
+						mOriginalMaterialColors[instanceID2] = value2;
+					}
+				}
+			}
+			return mOriginalMaterialColors;
+		}
+	}
+
+	public bool invuln { get; set; }
+
+	public float timeSinceDamaged { get; set; }
+
+	public bool impactPauseSuspended { get; set; }
 
 	public GameObject meleeWeaponPrefab
 	{
@@ -122,12 +233,25 @@ public class Character : Weakable
 			{
 				mPaperDollMeleeWeapon = new List<GameObject>();
 			}
+			mMeleeWeaponTrail = new List<MeleeWeaponTrail>();
 			for (int i = 0; i < Mathf.Min(kMeleeJointIDs.Length, mPaperDollMeleeWeapon.Count); i++)
 			{
 				GameObject gameObject = mPaperDollMeleeWeapon[i];
-				if (gameObject != null)
+				if (!(gameObject != null))
 				{
-					mPaperDollMeleeWeapon[i] = controller.InstantiateObjectOnJoint(gameObject, kMeleeJointIDs[i]);
+					continue;
+				}
+				mPaperDollMeleeWeapon[i] = controller.InstantiateObjectOnJoint(gameObject, kMeleeJointIDs[i]);
+				mMeleeWeaponTrail.AddRange(mPaperDollMeleeWeapon[i].GetComponentsInChildren<MeleeWeaponTrail>());
+				SetMeleeWeaponTrailVisible(false);
+				GameObject meleeUpgradeEffect = GetMeleeUpgradeEffect();
+				if (meleeUpgradeEffect != null)
+				{
+					GameObject gameObject2 = controller.SpawnEffectAtJoint(meleeUpgradeEffect, kMeleeJointIDs[i], true);
+					if ((bool)gameObject2)
+					{
+						gameObject2.transform.parent = mPaperDollMeleeWeapon[i].transform;
+					}
 				}
 			}
 		}
@@ -143,11 +267,21 @@ public class Character : Weakable
 		{
 			if (mPaperDollRangedWeapon != null)
 			{
-				UnityEngine.Object.Destroy(mPaperDollRangedWeapon);
+				GameObjectPool.DefaultObjectPool.Release(mPaperDollRangedWeapon);
 			}
-			if (value != null)
+			if (!(value != null))
 			{
-				mPaperDollRangedWeapon = controller.InstantiateObjectOnJoint(value, "ranged_weapon");
+				return;
+			}
+			mPaperDollRangedWeapon = controller.InstantiateObjectOnJoint(value, "ranged_weapon");
+			GameObject rangedUpgradeEffect = GetRangedUpgradeEffect();
+			if (rangedUpgradeEffect != null)
+			{
+				GameObject gameObject = controller.SpawnEffectAtJoint(rangedUpgradeEffect, "ranged_weapon", true);
+				if (gameObject != null)
+				{
+					gameObject.transform.parent = mPaperDollRangedWeapon.transform;
+				}
 			}
 		}
 	}
@@ -184,7 +318,7 @@ public class Character : Weakable
 		{
 			if (value < mStats.health)
 			{
-				if ((isPlayer || !isEnemy) && autoHealthRecovery >= 0f && WeakGlobalSceneBehavior<InGameImpl>.instance.allAlliesInvincibleTimer > 0f)
+				if ((isPlayer || !isEnemy) && autoHealthRecovery >= 0f && WeakGlobalMonoBehavior<InGameImpl>.Instance.allAlliesInvincibleTimer > 0f)
 				{
 					return;
 				}
@@ -262,10 +396,6 @@ public class Character : Weakable
 	{
 		get
 		{
-			if (Singleton<PlayModesManager>.instance.selectedMode == "zombies")
-			{
-				return isEnemy ? CharacterModelController.EPostDeathAction.ascend : ((!isPlayer) ? ((!isBase) ? CharacterModelController.EPostDeathAction.melt : CharacterModelController.EPostDeathAction.vanish) : CharacterModelController.EPostDeathAction.vanish);
-			}
 			return isEnemy ? CharacterModelController.EPostDeathAction.melt : ((!isPlayer) ? ((!isBase) ? CharacterModelController.EPostDeathAction.ascend : CharacterModelController.EPostDeathAction.vanish) : CharacterModelController.EPostDeathAction.vanish);
 		}
 	}
@@ -274,11 +404,11 @@ public class Character : Weakable
 	{
 		get
 		{
-			if (mCtrl == null)
-			{
-				Debug.Log("WARNING: cannot access 'controller' without setting the 'controllerObject' first.");
-			}
 			return mCtrl;
+		}
+		private set
+		{
+			mCtrl = value;
 		}
 	}
 
@@ -286,29 +416,38 @@ public class Character : Weakable
 	{
 		get
 		{
-			if (mCtrl == null)
+			if (controller == null)
 			{
 				return null;
 			}
-			return mCtrl.gameObject;
+			return controller.gameObject;
 		}
 		set
 		{
-			if (mCtrl != null)
+			if (mCtrl != null && mCtrl.gameObject != null)
 			{
 				UnityEngine.Object.Destroy(mCtrl.gameObject);
 				mCtrl = null;
 			}
-			mCtrl = value.GetComponent<CharacterModelController>();
-			if (!mCtrl)
+			if (value != null)
 			{
-				mCtrl = value.AddComponent<CharacterModelController>();
+				controller = value.GetComponent<CharacterModelController>();
+				if (!controller)
+				{
+					controller = value.AddComponent<CharacterModelController>();
+				}
+				controller.onMeleeAttackDelivery = OnAttackDelivery;
+				controller.onRangedAttackDelivery = OnRangedAttackDelivery;
+				controller.onMeleeAttack = OnMeleeAttack;
+				transform = controller.transform;
+				mBuffIconClient = new BuffIconClient(controller);
+				mObjectCamera = ObjectUtils.FindFirstCamera(controller.gameObject.layer);
 			}
-			mCtrl.onMeleeAttackDelivery = OnAttackDelivery;
-			mCtrl.onRangedAttackDelivery = OnRangedAttackDelivery;
-			mBuffIconClient = new BuffIconClient(mCtrl);
+			mGluiCamera = ObjectUtils.FindFirstCamera(LayerMask.NameToLayer("GLUI"));
 		}
 	}
+
+	public GameObject mountPrototype { get; private set; }
 
 	public string uniqueID
 	{
@@ -418,6 +557,18 @@ public class Character : Weakable
 		}
 	}
 
+	public bool enemyIgnoresMe
+	{
+		get
+		{
+			return mStats.enemyIgnoresMe;
+		}
+		set
+		{
+			mStats.enemyIgnoresMe = value;
+		}
+	}
+
 	public float meleeFreeze
 	{
 		get
@@ -442,6 +593,46 @@ public class Character : Weakable
 		}
 	}
 
+	public bool isMount
+	{
+		get
+		{
+			return mStats.isMount;
+		}
+		set
+		{
+			mStats.isMount = value;
+		}
+	}
+
+	public bool isMounted
+	{
+		get
+		{
+			return mStats.isMounted;
+		}
+		set
+		{
+			mStats.isMounted = value;
+		}
+	}
+
+	public bool isActive
+	{
+		get
+		{
+			return mActive && controller != null;
+		}
+		set
+		{
+			mActive = value;
+			if (controller != null)
+			{
+				controller.enabled = value;
+			}
+		}
+	}
+
 	public bool canMeleeAttack
 	{
 		get
@@ -450,11 +641,35 @@ public class Character : Weakable
 		}
 	}
 
+	public bool canMeleeFliers
+	{
+		get
+		{
+			return mStats.canMeleeFliers;
+		}
+		set
+		{
+			mStats.canMeleeFliers = value;
+		}
+	}
+
+	public bool canMeleeProjectiles
+	{
+		get
+		{
+			return mStats.canMeleeProjectiles;
+		}
+		set
+		{
+			mStats.canMeleeProjectiles = value;
+		}
+	}
+
 	public bool canUseRangedAttack
 	{
 		get
 		{
-			return isEffectivelyIdle && bowAttackRange > 0f && bowProjectile != 0 && (mInRangedAttackCycle || rangedPreAttackDelay <= 0f) && (mRangedAttackDelay <= 0f || !mRangedAttackDelivered);
+			return isEffectivelyIdle && bowAttackRange > 0f && bowProjectile != "None" && !string.IsNullOrEmpty(bowProjectile) && (mInRangedAttackCycle || rangedPreAttackDelay <= 0f) && (mRangedAttackDelay <= 0f || !mRangedAttackDelivered);
 		}
 	}
 
@@ -462,7 +677,7 @@ public class Character : Weakable
 	{
 		get
 		{
-			return isPlayer ? 0f : ((!isEnemy) ? WeakGlobalInstance<CharactersManager>.instance.allyMeleePreAttackDelay : WeakGlobalInstance<CharactersManager>.instance.enemyMeleePreAttackDelay);
+			return isPlayer ? 0f : ((!isEnemy) ? WeakGlobalInstance<CharactersManager>.Instance.allyMeleePreAttackDelay : WeakGlobalInstance<CharactersManager>.Instance.enemyMeleePreAttackDelay);
 		}
 	}
 
@@ -470,7 +685,7 @@ public class Character : Weakable
 	{
 		get
 		{
-			return isPlayer ? 0f : ((!isEnemy) ? WeakGlobalInstance<CharactersManager>.instance.allyRangedPreAttackDelay : WeakGlobalInstance<CharactersManager>.instance.enemyRangedPreAttackDelay);
+			return isPlayer ? 0f : ((!isEnemy) ? WeakGlobalInstance<CharactersManager>.Instance.allyRangedPreAttackDelay : WeakGlobalInstance<CharactersManager>.Instance.enemyRangedPreAttackDelay);
 		}
 	}
 
@@ -478,15 +693,25 @@ public class Character : Weakable
 	{
 		get
 		{
-			return (mStats.projectile == Projectile.EProjectileType.HealBolt || mStats.projectile == Projectile.EProjectileType.EvilHealBolt) && bowAttackRange > 0f;
+			return (mStats.projectile == "HealBolt" || mStats.projectile == "EvilHealBolt") && bowAttackRange > 0f;
 		}
 	}
+
+	public bool onlyCorruptibleTargets
+	{
+		get
+		{
+			return mStats.projectile == "Corruption";
+		}
+	}
+
+	public string corruptionID { get; protected set; }
 
 	public bool hasRangedAttack
 	{
 		get
 		{
-			return bowAttackRange > 0f && mStats.projectile != Projectile.EProjectileType.HealBolt && mStats.projectile != Projectile.EProjectileType.None;
+			return bowAttackRange > 0f && mStats.projectile != "HealBolt" && mStats.projectile != "None" && !string.IsNullOrEmpty(mStats.projectile);
 		}
 	}
 
@@ -494,7 +719,7 @@ public class Character : Weakable
 	{
 		get
 		{
-			return mCtrl.isEffectivelyIdle;
+			return controller.isEffectivelyIdle;
 		}
 	}
 
@@ -515,7 +740,15 @@ public class Character : Weakable
 	{
 		get
 		{
-			return mCtrl.isInKnockback;
+			return controller.isInKnockback;
+		}
+	}
+
+	public bool isInJump
+	{
+		get
+		{
+			return controller.isInJump;
 		}
 	}
 
@@ -539,7 +772,7 @@ public class Character : Weakable
 	{
 		get
 		{
-			if (mCtrl.facing == FacingType.Right)
+			if (controller.facing == FacingType.Right)
 			{
 				return new GameRange(position.z, position.z + mStats.meleeAttackRange);
 			}
@@ -551,7 +784,7 @@ public class Character : Weakable
 	{
 		get
 		{
-			if (mCtrl.facing == FacingType.Right)
+			if (controller.facing == FacingType.Right)
 			{
 				return new GameRange(position.z, position.z + mStats.meleeAttackRange * 1.3f);
 			}
@@ -595,6 +828,18 @@ public class Character : Weakable
 		}
 	}
 
+	public int knockbackPowerRanged
+	{
+		get
+		{
+			return mStats.knockbackPowerRanged;
+		}
+		set
+		{
+			mStats.knockbackPowerRanged = value;
+		}
+	}
+
 	public int knockbackResistance
 	{
 		get
@@ -623,7 +868,7 @@ public class Character : Weakable
 	{
 		get
 		{
-			if (mCtrl.facing == FacingType.Left)
+			if (controller.facing == FacingType.Left)
 			{
 				return new GameRange(position.z - mStats.bowAttackRange, position.z - mStats.meleeAttackRange);
 			}
@@ -635,7 +880,7 @@ public class Character : Weakable
 	{
 		get
 		{
-			if (mCtrl.facing == FacingType.Left)
+			if (controller.facing == FacingType.Left)
 			{
 				return new GameRange(position.z - mStats.bowAttackRange * 1.3f, position.z - mStats.meleeAttackRange);
 			}
@@ -647,7 +892,7 @@ public class Character : Weakable
 	{
 		get
 		{
-			if (mCtrl.facing == FacingType.Left)
+			if (controller.facing == FacingType.Left)
 			{
 				return new GameRange(position.z - mStats.bowAttackRange * 1.3f, position.z);
 			}
@@ -675,7 +920,7 @@ public class Character : Weakable
 		}
 	}
 
-	public float bowDamage
+	public virtual float bowDamage
 	{
 		get
 		{
@@ -687,7 +932,7 @@ public class Character : Weakable
 		}
 	}
 
-	public Projectile.EProjectileType bowProjectile
+	public string bowProjectile
 	{
 		get
 		{
@@ -699,11 +944,23 @@ public class Character : Weakable
 		}
 	}
 
+	public DOTInfo dotInfo
+	{
+		get
+		{
+			return mStats.dotInfo;
+		}
+		set
+		{
+			mStats.dotInfo = value;
+		}
+	}
+
 	public bool usesFocusedFire
 	{
 		get
 		{
-			return bowProjectile != Projectile.EProjectileType.IceArrow;
+			return bowProjectile != "IceArrow";
 		}
 	}
 
@@ -715,7 +972,7 @@ public class Character : Weakable
 		}
 	}
 
-	public float meleeDamage
+	public virtual float meleeDamage
 	{
 		get
 		{
@@ -736,6 +993,36 @@ public class Character : Weakable
 		set
 		{
 			mStats.damageBuffPercent = Mathf.Max(0f, value);
+		}
+	}
+
+	public GameObject damageBuffEffect { get; set; }
+
+	public float speedBuffModifier
+	{
+		get
+		{
+			return mSpeedBuffModifier;
+		}
+		set
+		{
+			mSpeedBuffModifier = value;
+		}
+	}
+
+	public float buffFrequency { get; set; }
+
+	public bool buffAffectsSelf { get; set; }
+
+	public int leadershipCostModifierBuff
+	{
+		get
+		{
+			return mStats.leadershipCostModifierBuff;
+		}
+		set
+		{
+			mStats.leadershipCostModifierBuff = value;
 		}
 	}
 
@@ -763,6 +1050,18 @@ public class Character : Weakable
 		}
 	}
 
+	public CanBuffFunc canBuffFunc
+	{
+		get
+		{
+			return mStats.canBuffFunc;
+		}
+		set
+		{
+			mStats.canBuffFunc = value;
+		}
+	}
+
 	public float postAttackMoveDelay
 	{
 		get
@@ -781,19 +1080,11 @@ public class Character : Weakable
 	{
 		get
 		{
-			return mCtrl.position;
+			return controller.position;
 		}
 		set
 		{
-			mCtrl.position = value;
-		}
-	}
-
-	public float speedSnareTimeLeft
-	{
-		get
-		{
-			return (!mHasSpeedSnare) ? 0f : mSpeedSnareDuration;
+			controller.position = value;
 		}
 	}
 
@@ -838,6 +1129,18 @@ public class Character : Weakable
 		}
 	}
 
+	public GameObject rootObject
+	{
+		get
+		{
+			return (!(controller != null)) ? null : controller.gameObject;
+		}
+	}
+
+	protected bool isHealing { get; private set; }
+
+	public HUDHealthBarMini healthBarMini { get; set; }
+
 	protected Character singleAttackTarget
 	{
 		get
@@ -876,6 +1179,34 @@ public class Character : Weakable
 		}
 	}
 
+	public bool dynamicSpawn { get; set; }
+
+	public string id { get; set; }
+
+	public int ownerId { get; set; }
+
+	public float mountedHealth { get; protected set; }
+
+	public float mountedHealthMax { get; protected set; }
+
+	public CharacterData charData { get; private set; }
+
+	public bool isBlastoffFlyer { get; protected set; }
+
+	public bool LeftToRight
+	{
+		get
+		{
+			return mIsLeftToRightGameplay;
+		}
+		set
+		{
+			mIsLeftToRightGameplay = value;
+		}
+	}
+
+	public bool BlocksHeroMovement { get; set; }
+
 	public Character()
 	{
 		mResourceDrops = new ResourceDrops();
@@ -900,30 +1231,141 @@ public class Character : Weakable
 		{
 			Die();
 		}
-		if (mHealthBar != null)
-		{
-			mHealthBar.Update(controller.position, health / maxHealth);
-		}
 		UpdateAiming();
+		if (healthBarMini != null)
+		{
+			healthBarMini.Update();
+		}
+		timeSinceDamaged += Time.deltaTime;
+		UpdateHealthTexts();
 	}
 
 	public virtual void Destroy()
 	{
-		if (isUnique && WeakGlobalInstance<Smithy>.instance != null)
+		GameObject go = controlledObject;
+		ProceduralShaderManager.StopShaderEvents((ShaderEvent se) => se.gameObject == go);
+		if (isUnique && WeakGlobalMonoBehavior<InGameImpl>.Instance != null && WeakGlobalMonoBehavior<InGameImpl>.Instance.GetLeadership(ownerId) != null)
 		{
-			WeakGlobalInstance<Smithy>.instance.RegisterUnique(uniqueID, false);
+			WeakGlobalMonoBehavior<InGameImpl>.Instance.GetLeadership(ownerId).RegisterUnique(uniqueID, false);
 		}
-		if (mCtrl != null)
+		DestroyMeleeWeaponPrefabs();
+		rangedWeaponPrefab = null;
+		mPaperDollMeleeWeapon.Clear();
+		mPaperDollRangedWeapon = null;
+		if (controller != null)
 		{
-			mCtrl.Destroy();
-			mCtrl = null;
+			controller.Destroy();
+			controller = null;
 		}
-		if (mHealthBar != null)
+		if (healthBarMini != null)
 		{
-			mHealthBar.Destroy();
-			mHealthBar = null;
+			healthBarMini.Destroy();
+			healthBarMini = null;
 		}
+		foreach (HealthTextInfo healthTextObject in healthTextObjects)
+		{
+			sObjectPool.Release(healthTextObject.obj);
+		}
+		EffectKiller[] componentsInChildren = go.GetComponentsInChildren<EffectKiller>(true);
+		if (componentsInChildren != null)
+		{
+			EffectKiller[] array = componentsInChildren;
+			foreach (EffectKiller effectKiller in array)
+			{
+				effectKiller.transform.parent = null;
+				effectKiller.Cleanup();
+			}
+		}
+		ClearBuffs();
 		BreakWeakLinks();
+	}
+
+	private void CalcHealthTextPos(ref Vector3 currentPos, float lifetime)
+	{
+		currentPos.y += 1.5f + lifetime * 0.5f;
+		currentPos = mObjectCamera.WorldToScreenPoint(currentPos);
+		currentPos = mGluiCamera.ScreenToWorldPoint(currentPos);
+		currentPos.z += 1000f;
+	}
+
+	private void AddHealthText(float damage)
+	{
+		SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource("Assets/Game/Resources/UI/Prefabs/HUD/HealthTextPF.prefab", 1);
+		GameObject gameObject = sObjectPool.Acquire(cachedResource.Resource as GameObject);
+		Vector3 currentPos = controlledObject.transform.position;
+		CalcHealthTextPos(ref currentPos, 0f);
+		gameObject.transform.position = currentPos;
+		GluiText component = gameObject.GetComponent<GluiText>();
+		component.Text = damage.ToString();
+		component.Color = Color.red;
+		gameObject.transform.localScale = new Vector3(0.75f, 0.75f, 0.75f);
+		HealthTextInfo item = new HealthTextInfo(gameObject);
+		healthTextObjects.Add(item);
+	}
+
+	private void UpdateHealthTexts()
+	{
+		Vector3 vector = controlledObject.transform.position;
+		for (int num = healthTextObjects.Count - 1; num >= 0; num--)
+		{
+			HealthTextInfo value = healthTextObjects[num];
+			GameObject obj = value.obj;
+			value.lifetime += Time.deltaTime;
+			if (obj == null)
+			{
+				healthTextObjects.RemoveAt(num);
+			}
+			else if (value.lifetime > 2f)
+			{
+				sObjectPool.Release(obj);
+				healthTextObjects.RemoveAt(num);
+			}
+			else
+			{
+				Vector3 currentPos = vector;
+				float lifetime = value.lifetime;
+				CalcHealthTextPos(ref currentPos, lifetime);
+				Transform transform = obj.transform;
+				transform.position = currentPos;
+				value.lifetime += Time.deltaTime;
+				healthTextObjects[num] = value;
+			}
+		}
+	}
+
+	public void ApplyBuff(float damagePercent, float speedModifier, float duration, object source, GameObject effect, string jointForAttach)
+	{
+		int num = mBuffReceievedInfos.FindIndex((BuffInfo n) => n.source == source);
+		BuffInfo buffInfo = default(BuffInfo);
+		buffInfo.percentDamageToAdd = damagePercent;
+		buffInfo.speedModifier = speedModifier;
+		buffInfo.duration = duration;
+		buffInfo.source = source;
+		if (num < 0)
+		{
+			if (effect != null)
+			{
+				buffInfo.effect = controller.InstantiateObjectOnJoint(effect, jointForAttach);
+			}
+			mBuffReceievedInfos.Add(buffInfo);
+			mBuffChanged = true;
+		}
+		else
+		{
+			buffInfo.effect = mBuffReceievedInfos[num].effect;
+			mBuffReceievedInfos[num] = buffInfo;
+			mBuffChanged = true;
+		}
+		controller.AddMaterialSwitchIgnoreObj(buffInfo.effect);
+	}
+
+	private void ClearBuffs()
+	{
+		foreach (BuffInfo mBuffReceievedInfo in mBuffReceievedInfos)
+		{
+			GameObjectPool.DefaultObjectPool.Release(mBuffReceievedInfo.effect);
+		}
+		mBuffReceievedInfos.Clear();
 	}
 
 	private void UpdateBuffsAndAfflictions()
@@ -938,8 +1380,23 @@ public class Character : Weakable
 				if (mDOTcurrentTime <= 0f)
 				{
 					lastAttackTypeHitWith = EAttackType.DOT;
-					health -= mDOTdamage;
+					if (mDOTAttacker == WeakGlobalMonoBehavior<InGameImpl>.Instance.hero)
+					{
+						Singleton<PlayerWaveEventData>.Instance.AccumulateDamage(Mathf.Min(health, mDOTdamage));
+					}
+					if (!invuln && !enemyIgnoresMe)
+					{
+						health -= mDOTdamage;
+					}
 					mDOTcurrentTime = mDOTfrequency;
+					if (mDOTpauseTime > 0f)
+					{
+						controller.impactPauseTime = mDOTpauseTime;
+					}
+					if (mDOTColorTint.HasValue)
+					{
+						MaterialColorFlicker(mDOTColorTint.Value, 0f, 0.03f, 0f, mDOTfrequency);
+					}
 				}
 			}
 			else
@@ -948,86 +1405,132 @@ public class Character : Weakable
 				mDOTdamage = 0f;
 				mDOTcurrentTime = 0f;
 				mDOTfrequency = 0f;
+				mDOTAttacker = null;
 				mHasDOT = false;
 			}
 		}
-		if (mHasSpeedSnare)
+		if (health <= 0f)
 		{
-			if (mSpeedSnareDuration > 0f)
-			{
-				mSpeedSnareDuration -= deltaTime;
-			}
-			else
-			{
-				mSpeedSnareDuration = 0f;
-				controller.speedModifier = 1f;
-				mHasSpeedSnare = false;
-			}
+			buffIcon.Hide("Assets/Game/Resources/FX/BuffIcon.prefab");
+			ClearBuffs();
 		}
-		if (mDamageBuffDuration > 0f)
+		else
 		{
-			mDamageBuffDuration = Mathf.Max(0f, mDamageBuffDuration - deltaTime);
-			if (mDamageBuffDuration <= 0f || health <= 0f)
+			for (int num = mBuffReceievedInfos.Count - 1; num >= 0; num--)
 			{
-				mDamageBuffPercent = 0f;
-				buffIcon.Hide("FX/BuffIcon");
-			}
-		}
-		if (damageBuffPercent > 0f && mDamageBuffDuration < bowAttackFrequency * 0.5f)
-		{
-			List<Character> charactersInRange = WeakGlobalInstance<CharactersManager>.instance.GetCharactersInRange(buffEffectGameRange, isEnemy);
-			foreach (Character item in charactersInRange)
-			{
-				item.mDamageBuffDuration = bowAttackFrequency;
-				if (damageBuffPercent > item.mDamageBuffPercent)
+				BuffInfo value = mBuffReceievedInfos[num];
+				float num2 = Mathf.Max(0f, value.duration - deltaTime);
+				if (num2 <= 0f)
 				{
-					item.mDamageBuffPercent = damageBuffPercent;
+					GameObjectPool.DefaultObjectPool.Release(value.effect);
+					value.effect = null;
+					mBuffReceievedInfos.RemoveAt(num);
+					mBuffChanged = true;
 				}
-				item.buffIcon.Show("FX/BuffIcon");
+				else
+				{
+					value.duration = num2;
+					mBuffReceievedInfos[num] = value;
+				}
+			}
+			if (mBuffChanged)
+			{
+				float num3 = 0f;
+				float num4 = 1f;
+				bool flag = false;
+				for (int num5 = mBuffReceievedInfos.Count - 1; num5 >= 0; num5--)
+				{
+					BuffInfo buffInfo = mBuffReceievedInfos[num5];
+					if (buffInfo.effect == null)
+					{
+						flag = true;
+					}
+					num3 += buffInfo.percentDamageToAdd;
+					num4 += buffInfo.speedModifier - 1f;
+				}
+				if (!flag)
+				{
+					buffIcon.Hide("Assets/Game/Resources/FX/BuffIcon.prefab");
+				}
+				else
+				{
+					buffIcon.Show("Assets/Game/Resources/FX/BuffIcon.prefab");
+				}
+				mDamageBuffPercent = num3;
+				controller.speedModifier = Mathf.Clamp(num4, 0.3f, 2f);
+				mBuffChanged = false;
 			}
 		}
-		if (!isEnemy && !isBase && WeakGlobalSceneBehavior<InGameImpl>.instance != null && WeakGlobalSceneBehavior<InGameImpl>.instance.allAlliesInvincibleTimer > 0f)
+		buffFrequency -= deltaTime;
+		if ((damageBuffPercent != 0f || speedBuffModifier != 1f) && buffFrequency <= bowAttackFrequency * 0.5f)
 		{
-			buffIcon.Show("FX/BuffNightOfDeadIcon", WeakGlobalSceneBehavior<InGameImpl>.instance.allAlliesInvincibleTimer, 10);
+			buffFrequency = Mathf.Max(bowAttackFrequency, 1f);
+			List<Character> alliesInRange = WeakGlobalInstance<CharactersManager>.Instance.GetAlliesInRange(buffEffectGameRange, ownerId);
+			foreach (Character item in alliesInRange)
+			{
+				if ((buffAffectsSelf || (item != this && item.acceptsBuffs)) && (canBuffFunc == null || canBuffFunc(item)))
+				{
+					item.ApplyBuff(damageBuffPercent, speedBuffModifier, buffFrequency, this, damageBuffEffect, "body_effect");
+				}
+			}
+		}
+		if (!isEnemy && !isBase && WeakGlobalMonoBehavior<InGameImpl>.Instance != null && WeakGlobalMonoBehavior<InGameImpl>.Instance.allAlliesInvincibleTimer > 0f && acceptsBuffs && acceptsBuffs)
+		{
+			buffIcon.Show("Assets/Game/Resources/FX/BuffNightOfDeadIcon.prefab", WeakGlobalMonoBehavior<InGameImpl>.Instance.allAlliesInvincibleTimer, 10);
 		}
 		if (string.IsNullOrEmpty(upgradeAlliesFrom) || !(mRangedAttackDelay <= 0f) || string.IsNullOrEmpty(upgradeAlliesTo))
 		{
 			return;
 		}
 		mRangedAttackDelay = bowAttackFrequency;
-		List<Character> charactersInRange2 = WeakGlobalInstance<CharactersManager>.instance.GetCharactersInRange(buffEffectGameRange, isEnemy);
-		foreach (Character item2 in charactersInRange2)
+		List<Character> charactersInRange = WeakGlobalInstance<CharactersManager>.Instance.GetCharactersInRange(buffEffectGameRange, ownerId);
+		foreach (Character item2 in charactersInRange)
 		{
 			if (CheckIfTargetValid(item2) && item2.uniqueID == upgradeAlliesFrom)
 			{
-				Character cToChange = item2;
-				CharactersManager instance = WeakGlobalInstance<CharactersManager>.instance;
+				Helper cToChange = item2 as Helper;
+				if (uniqueID == "Swordsmith")
+				{
+					Singleton<Achievements>.Instance.IncrementAchievement("SwordsmithSwap", 1);
+					WeakGlobalMonoBehavior<InGameImpl>.Instance.CanDoRevolutionAchievement = true;
+				}
+				else if (uniqueID == "Rifleman")
+				{
+					Singleton<Achievements>.Instance.IncrementAchievement("RiflesmithSwap", 1);
+				}
+				else if (uniqueID == "Horse_Master")
+				{
+					Singleton<Achievements>.Instance.IncrementAchievement("HorsemasterSwap", 1);
+				}
+				CharactersManager instance = WeakGlobalInstance<CharactersManager>.Instance;
 				instance.postUpdateFunc = (Action)Delegate.Combine(instance.postUpdateFunc, (Action)delegate
 				{
-					WeakGlobalInstance<Smithy>.instance.ReplaceHelperWith(cToChange, upgradeAlliesTo);
+					WeakGlobalMonoBehavior<InGameImpl>.Instance.GetLeadership(ownerId).ReplaceHelperWith(cToChange, upgradeAlliesTo);
 				});
-				if (upgradeAlliesFrom.Equals("Farmer", StringComparison.OrdinalIgnoreCase))
-				{
-					Singleton<Profile>.instance.upgradedFarmers++;
-				}
-				else if (upgradeAlliesFrom.Equals("SamuraiArcher", StringComparison.OrdinalIgnoreCase))
-				{
-					Singleton<Profile>.instance.upgradedArchers++;
-				}
 			}
 		}
 	}
 
-	public virtual void RecievedAttack(EAttackType attackType, float damage)
+	public void DoExplosionBodyFX(GameObject go)
 	{
-		if (health <= 0f)
+		Renderer[] componentsInChildren = go.GetComponentsInChildren<Renderer>();
+		foreach (Renderer renderer in componentsInChildren)
 		{
-			return;
+			renderer.enabled = false;
 		}
-		lastAttackTypeHitWith = attackType;
-		float num = ((!isPlayer) ? 0.12f : 0f);
+		SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource("Assets/Game/Resources/FX/BodyExplosion.prefab", 1);
+		if (cachedResource.Resource != null)
+		{
+			controller.SpawnEffectAt(cachedResource.Resource as GameObject, transform.position);
+		}
+	}
+
+	public virtual void RecievedAttackFX(EAttackType attackType, float damage, Character attacker)
+	{
+		float num = ((!isPlayer && !canMeleeProjectiles && !impactPauseSuspended) ? 0.12f : 0f);
 		bool flag = true;
 		GameObject gameObject = null;
+		bool flag2 = WeakGlobalMonoBehavior<InGameImpl>.Instance.ShouldShowHitFX();
 		switch (attackType)
 		{
 		case EAttackType.Arrow:
@@ -1048,7 +1551,7 @@ public class Character : Weakable
 			break;
 		case EAttackType.Blunt:
 			controller.PlaySoundEvent("BluntWepImpact");
-			gameObject = controller.bluntImpactEffect;
+			gameObject = controller.bladeImpactEffect;
 			break;
 		case EAttackType.BladeCritical:
 			controller.PlaySoundEvent("SwordImpactBig");
@@ -1060,7 +1563,7 @@ public class Character : Weakable
 			break;
 		case EAttackType.BluntCritical:
 			controller.PlaySoundEvent("BluntWepImpactBig");
-			gameObject = controller.bluntCriticalImpactEffect;
+			gameObject = controller.bladeCriticalImpactEffect;
 			break;
 		case EAttackType.Trample:
 			if ((double)UnityEngine.Random.value < 0.5)
@@ -1076,17 +1579,33 @@ public class Character : Weakable
 			break;
 		case EAttackType.Sonic:
 			num = 0f;
+			controller.StopWalking();
+			controller.LoopStunAnim("stun");
 			break;
 		case EAttackType.Slice:
-			if (health > damage)
+			if (!(health > damage))
 			{
-				gameObject = controller.bladeImpactEffect;
-				controller.SpawnEffectAtJoint(Resources.Load("FX/KatanaBlood") as GameObject, "impact_target", false);
+				break;
+			}
+			gameObject = controller.bladeImpactEffect;
+			if (flag2)
+			{
+				SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource("Assets/Game/Resources/FX/KatanaBlood.prefab", 1);
+				if (cachedResource != null)
+				{
+					controller.SpawnEffectAtJoint(cachedResource.Resource as GameObject, "impact_target", false);
+				}
 			}
 			break;
 		case EAttackType.Lightning:
 			flag = false;
 			controller.PlayHurtAnim("shock");
+			break;
+		case EAttackType.Flash:
+			num = 0f;
+			flag = false;
+			controller.StopWalking();
+			controller.LoopStunAnim("stun");
 			break;
 		case EAttackType.Holy:
 		case EAttackType.Stomp:
@@ -1104,42 +1623,69 @@ public class Character : Weakable
 			}
 			break;
 		}
-		if (num > 0f)
+		if (damage > 0f)
 		{
-			controller.impactPauseTime = num;
-		}
-		if (gameObject != null)
-		{
-			controller.SpawnEffectAtJoint(gameObject, "impact_target", false);
-		}
-		if (flag)
-		{
-			ProceduralShaderManager.postShaderEvent(new DiffuseFadeInOutShaderEvent(mCtrl.gameObject, Color.red, 0f, 0f, 0.25f));
-		}
-		health -= damage;
-		if (controller.name == "Base")
-		{
-			Singleton<PlayStatistics>.instance.stats.gateWasDamaged = true;
+			if (num > 0f)
+			{
+				controller.impactPauseTime = num;
+			}
+			if (gameObject != null && flag2)
+			{
+				controller.SpawnEffectAtJoint(gameObject, "impact_target", false);
+				WeakGlobalMonoBehavior<InGameImpl>.Instance.ResetHitEffectTimer();
+			}
+			if (flag && supportColorFlash)
+			{
+				ProceduralShaderManager.postShaderEvent(new DiffuseFadeInOutShaderEvent(controller.gameObject, Color.red, 0f, 0f, 0.25f, OriginalMaterialColors, controller.GetMaterialSwitchIgnoreObjects()));
+			}
+			timeSinceDamaged = 0f;
+			if (Singleton<Profile>.Instance.showHealthText)
+			{
+				AddHealthText(damage);
+			}
 		}
 	}
 
-	public void RecievedHealing(float healAmount)
+	public void RecievedAttack(EAttackType attackType, float damage, Character attacker)
 	{
-		if (!(health <= 0f) && (!isPlayer || !(health <= 0.1f) || WeakGlobalSceneBehavior<InGameImpl>.instance.gate.health != 0f))
+		RecievedAttack(attackType, damage, attacker, true);
+	}
+
+	public virtual void RecievedAttack(EAttackType attackType, float damage, Character attacker, bool canReflect)
+	{
+		if (!(health <= 0f) && !invuln && !enemyIgnoresMe)
+		{
+			lastAttackTypeHitWith = attackType;
+			RecievedAttackFX(attackType, damage, attacker);
+			if (attacker == WeakGlobalMonoBehavior<InGameImpl>.Instance.hero)
+			{
+				Singleton<PlayerWaveEventData>.Instance.AccumulateDamage(Mathf.Min(health, damage));
+			}
+			health -= damage;
+		}
+	}
+
+	public virtual void RecievedHealing(float healAmount)
+	{
+		if (!(health <= 0f) && (!isPlayer || !(health <= 0.1f) || WeakGlobalMonoBehavior<InGameImpl>.Instance.gate.health != 0f))
 		{
 			health += healAmount;
-			bool flag = healAmount >= 0f == isEnemy;
-			if (Singleton<PlayModesManager>.instance.selectedMode == "zombies")
+			SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource((healAmount >= 0f != isEnemy) ? "Assets/Game/Resources/FX/HealAura.prefab" : "Assets/Game/Resources/FX/EvilHealAura.prefab", 1);
+			if (cachedResource != null)
 			{
-				flag = !flag;
+				controller.SpawnEffectAtJoint(cachedResource.Resource as GameObject, "impact_target", true, 0.5f);
 			}
-			controller.SpawnEffectAtJoint(Resources.Load((!flag) ? "FX/HealAura" : "FX/EvilHealAura") as GameObject, "impact_target", true);
 		}
 	}
 
 	public bool TryKnockback(int attemptPower)
 	{
-		if (knockbackResistance >= 100 || attemptPower <= 0 || health <= 0f || isBase || isInKnockback)
+		return TryKnockback(attemptPower, false, Vector3.zero);
+	}
+
+	public bool TryKnockback(int attemptPower, bool force, Vector3 positionAdjust)
+	{
+		if ((!force && knockbackResistance >= 100) || attemptPower <= 0 || health <= 0f || isBase || isInKnockback)
 		{
 			return false;
 		}
@@ -1153,17 +1699,17 @@ public class Character : Weakable
 		}
 		if (UnityEngine.Random.Range(0, 100) < attemptPower)
 		{
-			ForceKnockback();
+			ForceKnockback(positionAdjust);
 			return true;
 		}
 		return false;
 	}
 
-	public void ForceKnockback()
+	public void ForceKnockback(Vector3 positionAdjustment)
 	{
 		if (!(health <= 0f) && !isBase)
 		{
-			controller.Knockback();
+			controller.Knockback(positionAdjustment);
 		}
 	}
 
@@ -1199,7 +1745,7 @@ public class Character : Weakable
 			dieAnim = "dieashes";
 			break;
 		}
-		if (isEnemy && !controller.startedDieAnim && WeakGlobalInstance<WaveManager>.instance.isDone && WeakGlobalInstance<CharactersManager>.instance.enemiesCount == 1)
+		if (isEnemy && controller != null && !controller.startedDieAnim && WeakGlobalInstance<WaveManager>.Instance != null && WeakGlobalInstance<WaveManager>.Instance.isDone && WeakGlobalInstance<CharactersManager>.Instance.enemiesCount == 1)
 		{
 			dieAnim = "dieexplode";
 			controller.impactPauseTime = 0f;
@@ -1210,12 +1756,12 @@ public class Character : Weakable
 	public void Die(string dieAnim)
 	{
 		buffIcon.Clear();
-		if (dieAnim.Length < 3 || controller.currentAnimation.Length < 3 || !(dieAnim.Substring(0, 3) == "die") || !(controller.currentAnimation.Substring(0, 3) == "die"))
+		if (dieAnim.Length < 3 || !(controller != null) || controller.currentAnimation == null || controller.currentAnimation.Length < 3 || !(dieAnim.Substring(0, 3) == "die") || !(controller.currentAnimation.Substring(0, 3) == "die"))
 		{
 			singleAttackTarget = null;
 			if (onDeathEvent != null)
 			{
-				CharactersManager instance = WeakGlobalInstance<CharactersManager>.instance;
+				CharactersManager instance = WeakGlobalInstance<CharactersManager>.Instance;
 				instance.postUpdateFunc = (Action)Delegate.Combine(instance.postUpdateFunc, onDeathEvent);
 				onDeathEvent = null;
 			}
@@ -1223,15 +1769,23 @@ public class Character : Weakable
 			{
 				SetRangeAttackMode(false);
 			}
-			controller.Die(dieAnim, postDeathAction);
+			if (controller != null)
+			{
+				controller.Die(dieAnim, postDeathAction);
+			}
+			OnDied();
 		}
+	}
+
+	protected virtual void OnDied()
+	{
 	}
 
 	public void StartMeleeAttackDelayTimer()
 	{
 		if (!isPlayer && !mInMeleeAttackCycle)
 		{
-			WeakGlobalInstance<CharactersManager>.instance.RegisterAttackStarted(isEnemy, false);
+			WeakGlobalInstance<CharactersManager>.Instance.RegisterAttackStarted(ownerId, false);
 		}
 		mMeleeAttackDelay = meleeAttackFrequency;
 		mMoveDelay = postAttackMoveDelay;
@@ -1242,11 +1796,16 @@ public class Character : Weakable
 	{
 		if (!isPlayer && !mInRangedAttackCycle && !isSpellCasterOnAllies)
 		{
-			WeakGlobalInstance<CharactersManager>.instance.RegisterAttackStarted(isEnemy, true);
+			WeakGlobalInstance<CharactersManager>.Instance.RegisterAttackStarted(ownerId, true);
 		}
 		mRangedAttackDelay = bowAttackFrequency;
 		mMoveDelay = postAttackMoveDelay;
 		mRangedAttackDelivered = false;
+	}
+
+	public void StopMoving(float stopTime)
+	{
+		mMoveDelay = Mathf.Max(stopTime, mMoveDelay);
 	}
 
 	public int DispersedAttackersCount(Character checkingAttacker)
@@ -1263,6 +1822,11 @@ public class Character : Weakable
 		return num;
 	}
 
+	protected virtual GameObject GetMeleeUpgradeEffect()
+	{
+		return null;
+	}
+
 	public void DestroyMeleeWeaponPrefabs()
 	{
 		if (mPaperDollMeleeWeapon != null)
@@ -1271,7 +1835,7 @@ public class Character : Weakable
 			{
 				if (item != null)
 				{
-					UnityEngine.Object.Destroy(item);
+					GameObjectPool.DefaultObjectPool.Release(item);
 				}
 			}
 			mPaperDollMeleeWeapon.Clear();
@@ -1282,35 +1846,74 @@ public class Character : Weakable
 		}
 	}
 
-	public void SetDamageOverTime(float damagePerTick, float tickFrequency, float durationOfEffect)
+	public void SetMeleeWeaponTrailVisible(bool visible)
+	{
+		if (mMeleeWeaponTrail == null)
+		{
+			return;
+		}
+		foreach (MeleeWeaponTrail item in mMeleeWeaponTrail)
+		{
+			item.enabled = visible;
+		}
+	}
+
+	protected virtual GameObject GetRangedUpgradeEffect()
+	{
+		return null;
+	}
+
+	public void ForceDeath()
+	{
+		mLeniencyTimer = -1f;
+		health = 0f;
+	}
+
+	public void SetDamageOverTime(float damagePerTick, float tickFrequency, float durationOfEffect, Character attacker)
 	{
 		mDOTcurrentTime = 0f;
 		mDOTdamage = damagePerTick;
 		mDOTfrequency = tickFrequency;
 		mDOTduration = durationOfEffect;
+		mDOTAttacker = attacker;
+		mDOTpauseTime = 0f;
+		mDOTColorTint = null;
 		mHasDOT = true;
 	}
 
-	public void SetSpeedModifier(float speedMod, float durationOfEffect)
+	public void SetDamageOverTimeSpecialType(float damagePerTick, float tickFrequency, float durationOfEffect, Character attacker, float impactPauseTime, EAttackType attackType)
 	{
-		controller.speedModifier = speedMod;
-		mSpeedSnareDuration = durationOfEffect;
-		mHasSpeedSnare = true;
+		mDOTcurrentTime = 0f;
+		mDOTdamage = damagePerTick;
+		mDOTfrequency = tickFrequency;
+		mDOTduration = durationOfEffect;
+		mDOTAttacker = attacker;
+		mDOTpauseTime = impactPauseTime;
+		if (attackType == EAttackType.SoulBurn)
+		{
+			mDOTColorTint = Color.green;
+		}
+		else
+		{
+			mDOTColorTint = null;
+		}
+		mHasDOT = true;
 	}
 
 	public void MaterialColorFadeInOut(Color color, float fadeInTime, float holdTime, float fadeOutTime)
 	{
-		ProceduralShaderManager.postShaderEvent(new DiffuseFadeInOutShaderEvent(controlledObject, color, fadeInTime, holdTime, fadeOutTime));
+		holdTime = Mathf.Max(0.1f, holdTime);
+		ProceduralShaderManager.postShaderEvent(new DiffuseFadeInOutShaderEvent(controlledObject, color, fadeInTime, holdTime, fadeOutTime, OriginalMaterialColors, controller.GetMaterialSwitchIgnoreObjects()));
 	}
 
 	public void MaterialColorSetPermanentColor(Color color)
 	{
-		ProceduralShaderManager.postShaderEvent(new DiffusePermShaderEvent(controlledObject, color));
+		ProceduralShaderManager.postShaderEvent(new DiffusePermShaderEvent(controlledObject, color, controller.GetMaterialSwitchIgnoreObjects(), OriginalMaterialColors));
 	}
 
 	public void MaterialColorFlicker(Color color, float fadeInTime, float holdTime, float fadeOutTime, float durationOfEffect)
 	{
-		ProceduralShaderManager.postShaderEvent(new DiffuseFlickerShaderEvent(controlledObject, color, fadeInTime, holdTime, fadeOutTime, durationOfEffect));
+		ProceduralShaderManager.postShaderEvent(new DiffuseFlickerShaderEvent(controlledObject, color, fadeInTime, holdTime, fadeOutTime, durationOfEffect, controller.GetMaterialSwitchIgnoreObjects(), OriginalMaterialColors));
 	}
 
 	public bool CheckIfTargetValid(Character target)
@@ -1335,57 +1938,118 @@ public class Character : Weakable
 		return true;
 	}
 
-	public void ApplyIceEffect(float duration)
+	public void ApplyIceEffect(float duration, Character source)
 	{
-		float num = 0.5f;
-		if (!(controller.speedModifier < num))
+		float speedModifier = 0.5f;
+		string abilityID = "Lethargy";
+		float fadeInTime = float.Parse(Singleton<AbilitiesDatabase>.Instance.GetAttribute(abilityID, "ColorEffectFadeIn"));
+		float fadeOutTime = float.Parse(Singleton<AbilitiesDatabase>.Instance.GetAttribute(abilityID, "ColorEffectFadeOut"));
+		SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource("Assets/Game/Resources/FX/Lethargy.prefab", 1);
+		GameObject effect = null;
+		if (cachedResource != null)
 		{
-			string abilityID = "Lethargy";
-			if (Singleton<PlayModesManager>.instance.selectedMode == "zombies")
-			{
-				abilityID = "LethargyZM";
-			}
-			float fadeInTime = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "ColorEffectFadeIn"));
-			float fadeOutTime = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "ColorEffectFadeOut"));
-			GameObject prefab = Resources.Load("FX/Lethargy") as GameObject;
-			UnityEngine.Object.Destroy(controller.InstantiateObjectOnJoint(prefab, "head_effect"), duration);
-			SetSpeedModifier(num, duration);
-			Color color = new Color((float)int.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "Red")) / 255f, (float)int.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "Green")) / 255f, (float)int.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "Blue")) / 255f);
-			MaterialColorFadeInOut(color, fadeInTime, duration, fadeOutTime);
+			effect = cachedResource.Resource as GameObject;
 		}
+		ApplyBuff(0f, speedModifier, duration, source, effect, "head_effect");
+		Color color = new Color((float)int.Parse(Singleton<AbilitiesDatabase>.Instance.GetAttribute(abilityID, "Red")) / 255f, (float)int.Parse(Singleton<AbilitiesDatabase>.Instance.GetAttribute(abilityID, "Green")) / 255f, (float)int.Parse(Singleton<AbilitiesDatabase>.Instance.GetAttribute(abilityID, "Blue")) / 255f);
+		MaterialColorFadeInOut(color, fadeInTime, duration, fadeOutTime);
 	}
 
-	public void SpawnOffspring(string friendID, int count)
+	private void SpawnOffspring(string friendID, int count)
 	{
+		if (controller.isPitThrown)
+		{
+			return;
+		}
 		for (int i = 0; i < count; i++)
 		{
 			Vector3 spawnPos = position;
-			spawnPos.z += UnityEngine.Random.Range(-50f, 100f);
-			spawnPos.x = WeakGlobalInstance<CharactersManager>.instance.GetBestSpawnXPos(spawnPos, WeakGlobalInstance<Smithy>.instance.helperSpawnArea.size.x, CharactersManager.ELanePreference.any, isEnemy, false, false);
+			spawnPos.z += UnityEngine.Random.Range(-0.5f, 1f);
+			spawnPos.x = WeakGlobalInstance<CharactersManager>.Instance.GetBestSpawnXPos(spawnPos, WeakGlobalInstance<Leadership>.Instance.helperSpawnArea.size.x, CharactersManager.ELanePreference.any, isEnemy, false, false);
 			if (isEnemy)
 			{
-				Enemy enemy = WeakGlobalInstance<WaveManager>.instance.ConstructEnemy(friendID, WeakGlobalInstance<WaveManager>.instance.enemiesSpawnArea.size.x / 2f, spawnPos, true);
-				if (enemy != null)
+				Character character = null;
+				bool flag = true;
+				if (WeakGlobalInstance<WaveManager>.Instance != null)
 				{
-					enemy.TryKnockback(100);
-					WeakGlobalInstance<CharactersManager>.instance.AddCharacter(enemy);
-					WeakGlobalInstance<WaveManager>.instance.totalEnemies++;
+					character = WeakGlobalInstance<WaveManager>.Instance.ConstructEnemy(friendID, WeakGlobalInstance<WaveManager>.Instance.enemiesSpawnArea.size.x / 2f, spawnPos, true);
+				}
+				else if (WeakGlobalMonoBehavior<InGameImpl>.Instance.GetLeadership(ownerId) != null)
+				{
+					Leadership.HelperTypeData data = new Leadership.HelperTypeData(friendID, 1);
+					character = WeakGlobalMonoBehavior<InGameImpl>.Instance.GetLeadership(ownerId).SpawnHelper(data, 1.5f, spawnPos);
+					flag = false;
+				}
+				if (character != null)
+				{
+					PerformKnockback(character, 100, false, Vector3.zero);
+					if (flag)
+					{
+						WeakGlobalInstance<CharactersManager>.Instance.AddCharacter(character);
+					}
 				}
 			}
-			else
+			else if (WeakGlobalMonoBehavior<InGameImpl>.Instance.GetLeadership(ownerId) != null)
 			{
-				Helper helper = WeakGlobalInstance<Smithy>.instance.ForceSpawn(friendID);
-				if (helper != null)
+				Character character2 = WeakGlobalMonoBehavior<InGameImpl>.Instance.GetLeadership(ownerId).ForceSpawn(friendID);
+				if (character2 != null)
 				{
-					helper.position = spawnPos;
-					helper.TryKnockback(100);
+					character2.position = spawnPos;
+					PerformKnockback(character2, 100, false, Vector3.zero);
 				}
 			}
 		}
+	}
+
+	public void SpawnOffspringMulti(List<string> friendIDs, int count)
+	{
+		if (!controller.isPitThrown)
+		{
+			int i = 0;
+			if (count > 0)
+			{
+				SpawnOffspring(friendIDs[0], count);
+				i = 1;
+			}
+			for (; i < friendIDs.Count; i++)
+			{
+				SpawnOffspring(friendIDs[i], 1);
+			}
+		}
+	}
+
+	public void SetMirroredSkeleton(bool mirrored)
+	{
+		SkinnedMeshRenderer componentInChildren = controlledObject.GetComponentInChildren<SkinnedMeshRenderer>();
+		if (!componentInChildren)
+		{
+			return;
+		}
+		Transform transform = componentInChildren.transform;
+		Transform parent = componentInChildren.transform.parent;
+		bool flag = false;
+		int num = 0;
+		while (parent != null && parent != null && !flag && num < 3)
+		{
+			for (int i = 0; i < parent.childCount; i++)
+			{
+				Transform child = parent.GetChild(i);
+				if (child.name.Contains("root"))
+				{
+					transform = child;
+					flag = true;
+					break;
+				}
+			}
+			parent = parent.parent;
+			num++;
+		}
+		transform.localScale = new Vector3((!mirrored) ? 1 : (-1), 1f, 1f);
 	}
 
 	private void UpdateAutoRecovery()
 	{
+		isHealing = false;
 		if (health != 0f && autoHealthRecovery != 0f)
 		{
 			if (mAutoRecoveryDelay > 0f)
@@ -1395,18 +2059,24 @@ public class Character : Weakable
 			if (mAutoRecoveryDelay <= 0f || !isPlayer)
 			{
 				health += Time.deltaTime * autoHealthRecovery;
+				isHealing = true;
 			}
 		}
 	}
 
 	protected bool IsInMeleeRangeOfOpponent(bool thatCanAttack)
 	{
-		return meleeAttackRange > 0f && WeakGlobalInstance<CharactersManager>.instance.IsCharacterInRange((!thatCanAttack || controller.isMoving) ? meleeAttackGameRange : meleeAttackHitGameRange, !isEnemy, isGateRusher, !thatCanAttack, false, true);
+		return meleeAttackRange > 0f && WeakGlobalInstance<CharactersManager>.Instance.IsCharacterInRange((!thatCanAttack || controller.isMoving) ? meleeAttackGameRange : meleeAttackHitGameRange, 1 - ownerId, isGateRusher, !thatCanAttack || canMeleeFliers, false, true, false);
+	}
+
+	protected bool IsInMeleeRangeOfProjectile()
+	{
+		return meleeAttackRange > 0f && WeakGlobalInstance<ProjectileManager>.Instance.IsProjectileInRange(meleeAttackHitGameRange, isEnemy);
 	}
 
 	protected bool IsInBowRangeOfOpponent()
 	{
-		return bowAttackRange > 0f && WeakGlobalInstance<CharactersManager>.instance.IsCharacterInRange(bowAttackGameRange, !isEnemy, isGateRusher, true, false, true);
+		return bowAttackRange > 0f && WeakGlobalInstance<CharactersManager>.Instance.IsCharacterInRange(bowAttackGameRange, 1 - ownerId, isGateRusher, true, false, true, onlyCorruptibleTargets);
 	}
 
 	protected bool IsInRangeOfHurtAlly()
@@ -1416,14 +2086,19 @@ public class Character : Weakable
 
 	protected bool IsInRangeOfHurtAlly(bool includeDecayingCharacters)
 	{
-		return bowAttackRange > 0f && WeakGlobalInstance<CharactersManager>.instance.IsCharacterInRange(buffEffectGameRange, isEnemy, false, true, true, includeDecayingCharacters);
+		return bowAttackRange > 0f && WeakGlobalInstance<CharactersManager>.Instance.IsCharacterInRange(buffEffectGameRange, ownerId, false, true, true, includeDecayingCharacters, false);
 	}
 
-	protected void ActivateHealthBar()
+	public void ActivateHealthBar()
 	{
-		if (mHealthBar == null)
+		if (WeakGlobalMonoBehavior<InGameImpl>.Exists)
 		{
-			mHealthBar = new MiniHealthBar((!isEnemy) ? new Color(0f, 1f, 0f) : new Color(1f, 0f, 0f), isBase);
+			if (healthBarMini != null)
+			{
+				healthBarMini.Destroy();
+			}
+			healthBarMini = new HUDHealthBarMini(this);
+			controller.AddMaterialSwitchIgnoreObj(healthBarMini.gameObject);
 		}
 	}
 
@@ -1431,7 +2106,7 @@ public class Character : Weakable
 	{
 		mStats.health = 0f;
 		Die("dieexplode");
-		mStats.meleeAttackRange = 250f;
+		mStats.meleeAttackRange = explosionRange();
 		OnAttackDelivery();
 	}
 
@@ -1455,6 +2130,29 @@ public class Character : Weakable
 		{
 			mInRangedAttackCycle = false;
 		}
+		if (!controller.isAttacking || !canMeleeProjectiles)
+		{
+			return;
+		}
+		List<Projectile> projectiles = WeakGlobalInstance<ProjectileManager>.Instance.projectiles;
+		foreach (Projectile item in projectiles)
+		{
+			if (isEnemy == item.shooter.isEnemy)
+			{
+				continue;
+			}
+			Vector3 location = item.transform.position;
+			float z = location.z;
+			if (meleeAttackHitGameRange.Contains(z))
+			{
+				SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource("Assets/Game/Resources/FX/ArmorSparks.prefab", 1);
+				if (cachedResource != null)
+				{
+					controller.SpawnEffectAt(cachedResource.Resource as GameObject, location);
+				}
+				item.Destroy();
+			}
+		}
 	}
 
 	private void UpdateMoveDelay()
@@ -1468,51 +2166,42 @@ public class Character : Weakable
 	private void OnAttackDelivery()
 	{
 		mMeleeAttackDelivered = true;
-		List<Character> charactersInRange = WeakGlobalInstance<CharactersManager>.instance.GetCharactersInRange(meleeAttackHitGameRange, !isEnemy);
+		List<Character> charactersInRange = WeakGlobalInstance<CharactersManager>.Instance.GetCharactersInRange(meleeAttackHitGameRange, 1 - ownerId);
 		int num = knockbackPower;
 		float num2 = meleeFreeze;
 		foreach (Character item in charactersInRange)
 		{
-			if (!CheckIfTargetValid(item) || item.isFlying)
+			if (CheckIfTargetValid(item) && (!item.isFlying || canMeleeFliers))
 			{
-				continue;
-			}
-			float num3 = randomCriticalDamage;
-			EAttackType eAttackType = EAttackType.Blunt;
-			if (meleeWeaponIsABlade)
-			{
-				eAttackType = ((!(num3 > 0f)) ? EAttackType.Blade : EAttackType.BladeCritical);
-			}
-			else if (num3 > 0f)
-			{
-				eAttackType = EAttackType.BluntCritical;
-			}
-			else if (exploseOnMelee)
-			{
-				eAttackType = EAttackType.Explosion;
-			}
-			item.RecievedAttack(eAttackType, meleeDamage + randomCriticalDamage);
-			item.TryKnockback(num);
-			num -= 100;
-			if (num2 > 0f)
-			{
-				item.ApplyIceEffect(num2);
-				num2 *= 0.6f;
-			}
-			if (isPlayer)
-			{
-				switch (eAttackType)
+				float num3 = randomCriticalDamage;
+				EAttackType attackType = EAttackType.Blunt;
+				if (meleeWeaponIsABlade)
 				{
-				case EAttackType.Blade:
-				case EAttackType.BladeCritical:
-					Singleton<PlayStatistics>.instance.stats.heroUsedHisMeleeAttack = true;
-					break;
-				case EAttackType.Arrow:
-					Singleton<PlayStatistics>.instance.stats.heroUsedHisRangedAttack = true;
-					break;
+					attackType = ((!(num3 > 0f)) ? EAttackType.Blade : EAttackType.BladeCritical);
+				}
+				else if (num3 > 0f)
+				{
+					attackType = EAttackType.BluntCritical;
+				}
+				else if (exploseOnMelee)
+				{
+					attackType = EAttackType.Explosion;
+				}
+				PerformKnockback(item, num, false, Vector3.zero);
+				item.RecievedAttack(attackType, meleeDamage + randomCriticalDamage, this);
+				num -= 100;
+				if (num2 > 0f)
+				{
+					item.ApplyIceEffect(num2, this);
+					num2 *= 0.6f;
 				}
 			}
 		}
+	}
+
+	public virtual void PerformKnockback(Character target, int knockbackPower, bool force, Vector3 positionAdjust)
+	{
+		target.TryKnockback(knockbackPower, force, positionAdjust);
 	}
 
 	private void OnRangedAttackDelivery()
@@ -1521,7 +2210,7 @@ public class Character : Weakable
 		{
 			mRangedAttackDelivered = true;
 			controller.SetArrowVisible(false);
-			WeakGlobalInstance<ProjectileManager>.instance.SpawnProjectile(bowProjectile, bowDamage, this, singleAttackTarget, controller.autoPaperdoll.GetJointPosition("projectile_spawn"));
+			WeakGlobalInstance<ProjectileManager>.Instance.SpawnProjectile(bowProjectile, bowDamage, this, singleAttackTarget, controller.autoPaperdoll.GetJointPosition("projectile_spawn"));
 		}
 		else
 		{
@@ -1529,12 +2218,17 @@ public class Character : Weakable
 		}
 	}
 
+	private void OnMeleeAttack(bool attacking)
+	{
+		SetMeleeWeaponTrailVisible(attacking);
+	}
+
 	protected void OnCastHeal()
 	{
 		mRangedAttackDelivered = true;
 		List<Character> list = new List<Character>();
-		List<Character> charactersInRange = WeakGlobalInstance<CharactersManager>.instance.GetCharactersInRange(bowAttackHitGameRange, isEnemy);
-		float num = health / maxHealth;
+		List<Character> charactersInRange = WeakGlobalInstance<CharactersManager>.Instance.GetCharactersInRange(bowAttackHitGameRange, ownerId);
+		float num = ((!(mountedHealthMax > 0f)) ? (health / maxHealth) : (mountedHealth / mountedHealthMax));
 		foreach (Character item in charactersInRange)
 		{
 			if (item.health >= item.maxHealth)
@@ -1611,21 +2305,19 @@ public class Character : Weakable
 		}
 		if (character == null)
 		{
-			character = ((isEnemy || !(Mathf.Abs(position.z - WeakGlobalSceneBehavior<InGameImpl>.instance.hero.position.z) <= bowAttackRange)) ? this : WeakGlobalSceneBehavior<InGameImpl>.instance.hero);
+			character = ((isEnemy || !(Mathf.Abs(position.z - WeakGlobalMonoBehavior<InGameImpl>.Instance.hero.position.z) <= bowAttackRange)) ? this : WeakGlobalMonoBehavior<InGameImpl>.Instance.hero);
 		}
 		controller.SetArrowVisible(false);
-		WeakGlobalInstance<ProjectileManager>.instance.SpawnProjectile(bowProjectile, bowDamage, this, character, controller.autoPaperdoll.GetJointPosition("projectile_spawn"));
+		WeakGlobalInstance<ProjectileManager>.Instance.SpawnProjectile(bowProjectile, bowDamage, this, character, controller.autoPaperdoll.GetJointPosition("projectile_spawn"));
 	}
 
 	protected void OnCastSpawnAllies()
 	{
-		if (spawnFriendID == null || spawnFriendID == string.Empty)
+		if (spawnFriendID != null && !(spawnFriendID == string.Empty))
 		{
-			Debug.Log("WARNING: The 'spawnFriendID' was not specified.");
-			return;
+			mRangedAttackDelivered = true;
+			SpawnOffspring(spawnFriendID, 1);
 		}
-		mRangedAttackDelivered = true;
-		SpawnOffspring(spawnFriendID, 1);
 	}
 
 	protected void SetRangeAttackMode(bool inRangeAttack)
@@ -1634,19 +2326,22 @@ public class Character : Weakable
 		{
 			rangedWeaponPrefab.SetActive(inRangeAttack);
 		}
-		if (ProjectileManager.ProjectileNeedsBothHands(bowProjectile))
+		if (bowProjectile != null && WeakGlobalInstance<ProjectileManager>.Instance != null)
 		{
-			foreach (GameObject item in mPaperDollMeleeWeapon)
+			if (WeakGlobalInstance<ProjectileManager>.Instance.ProjectileNeedsBothHands(bowProjectile))
 			{
-				if (item != null)
+				foreach (GameObject item in mPaperDollMeleeWeapon)
 				{
-					item.SetActive(!inRangeAttack);
+					if (item != null)
+					{
+						item.SetActive(!inRangeAttack);
+					}
 				}
 			}
-		}
-		if (ProjectileManager.ProjectileShownWhileAiming(bowProjectile))
-		{
-			controller.SetArrowVisible(inRangeAttack, bowProjectile);
+			if (WeakGlobalInstance<ProjectileManager>.Instance.ProjectileShownWhileAiming(bowProjectile))
+			{
+				controller.SetArrowVisible(inRangeAttack, bowProjectile);
+			}
 		}
 		controller.SetUseRangedAttackIdle(inRangeAttack);
 	}
@@ -1663,7 +2358,7 @@ public class Character : Weakable
 					controller.Idle();
 					return;
 				}
-				singleAttackTarget = WeakGlobalInstance<CharactersManager>.instance.GetBestRangedAttackTarget(this, bowAttackExtGameRange);
+				singleAttackTarget = WeakGlobalInstance<CharactersManager>.Instance.GetBestRangedAttackTarget(this, bowAttackExtGameRange);
 				if (singleAttackTarget == null)
 				{
 					controller.ResetAimAngle();
@@ -1686,5 +2381,15 @@ public class Character : Weakable
 				controller.ResetFacingAngle();
 			}
 		}
+	}
+
+	protected void SetDefaultFacing()
+	{
+		controller.facing = (mIsLeftToRightGameplay ? FacingType.Right : FacingType.Left);
+	}
+
+	public void AssignCharData(CharacterData newData)
+	{
+		charData = newData;
 	}
 }

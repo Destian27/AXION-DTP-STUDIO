@@ -2,7 +2,7 @@ public class WeakGlobalInstance<T>
 {
 	private static TypedWeakReference<T> mUniqueInstance;
 
-	public static T instance
+	public static T Instance
 	{
 		get
 		{
@@ -11,6 +11,14 @@ public class WeakGlobalInstance<T>
 				return default(T);
 			}
 			return mUniqueInstance.ptr;
+		}
+	}
+
+	public static bool Exists
+	{
+		get
+		{
+			return mUniqueInstance != null && mUniqueInstance.ptr != null;
 		}
 	}
 

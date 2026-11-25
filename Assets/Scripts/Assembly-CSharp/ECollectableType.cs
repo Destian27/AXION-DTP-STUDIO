@@ -3,12 +3,13 @@ public enum ECollectableType
 	coin = 0,
 	pachinkoball = 1,
 	gem = 2,
-	presentA = 3,
-	presentB = 4,
-	presentC = 5,
-	presentD = 6,
-	leadership = 7,
-	Count = 8,
-	FirstPresent = 3,
-	LastPresent = 6
+	soul = 3,
+	presentA = 4,
+	presentB = 5,
+	presentC = 6,
+	presentD = 7,
+	leadership = 8,
+	Count = 9,
+	FirstPresent = 4,
+	LastPresent = 7
 }

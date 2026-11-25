@@ -1,4 +1,4 @@
-using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -6,21 +6,59 @@ public class Hero : Character
 {
 	private const float kChickenSwordDuration = 15f;
 
+	private const float kMinLevel = 0.4f;
+
+	private const float kMaxLevel = 0.6f;
+
+	private const float kPulseSpeed = 1f;
+
+	private static readonly float kEnemyHeroKeepDist = 0.9f;
+
+	private GluiSprite mBloodEffectSprite;
+
+	private GameObject mHudBloodEffect;
+
+	private bool mBloodEffectActive;
+
+	private float FSBloodEffectFadeLevel;
+
+	private float mPulseDir = 1f;
+
 	private HeroControls mPlayerControls;
 
 	private bool mPerformingSpecialAttack;
 
 	private string mHealthBarToShow = "Sprites/HUD/life_bar_green";
 
-	private GameObject mKatanaSlashFXPrefab;
+	private HeroSchema mainData;
 
-	private bool mIsLeftToRightGameplay = true;
+	private GameObject mMPMeleeWeaponUpgradePrefab;
 
-	private List<string> mCachedMeleeWeaponPrefab = new List<string>();
+	private GameObject mMPRangedWeaponUpgradePrefab;
 
-	private string[] charmMeleePrefabID = new string[2] { "meleePrefab", "meleePrefab2" };
+	private ArmorLevelSchema mCharacterArmorSchema;
 
-	private string[] normalMeleePrefabID = new string[2] { "prefab", "prefab2" };
+	private ArmorLevelSchema mCollectionArmorSchema;
+
+	private float mLeftConstraint;
+
+	private float mRightConstraint;
+
+	private DataBundleRecordHandle<MaterialLookupSchema> matLookupHandle { get; set; }
+
+	public GameObject HUDBloodEffect
+	{
+		get
+		{
+			return mHudBloodEffect;
+		}
+		set
+		{
+			mHudBloodEffect = value;
+			mBloodEffectSprite = mHudBloodEffect.GetComponent<GluiSprite>();
+			mHudBloodEffect.SetActive(false);
+		}
+	}
 
 	public string healthBarFileToUse
 	{
@@ -38,167 +76,539 @@ public class Hero : Character
 		}
 	}
 
-	public Hero(Transform spawnPoint)
+	private float meleeDamageModifier { get; set; }
+
+	private float rangedDamageModifier { get; set; }
+
+	public override float meleeDamage
 	{
-		base.isPlayer = true;
-		mIsLeftToRightGameplay = Singleton<PlayModesManager>.instance.gameDirection == PlayModesManager.GameDirection.LeftToRight;
-		SDFTreeNode sDFTreeNode = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Heroes/" + Singleton<Profile>.instance.heroID);
-		string path = GetHeroPrefab(sDFTreeNode);
-		if (Singleton<Profile>.instance.inBonusWave)
+		get
 		{
-			path = sDFTreeNode["ghostPrefab"];
-		}
-		base.controlledObject = (GameObject)UnityEngine.Object.Instantiate(Resources.Load(path));
-		base.controller.position = spawnPoint.position;
-		SetDefaultFacing();
-		base.stats = GetHeroStats();
-		UpdateHealthThreshold();
-		mPlayerControls = new HeroControls();
-		mPlayerControls.onMoveLeft = onMoveLeft;
-		mPlayerControls.onMoveRight = onMoveRight;
-		mPlayerControls.onDontMove = onDontMove;
-		if (!Singleton<Profile>.instance.inBonusWave)
-		{
-			RestoreMeleeWeapon();
-		}
-		base.rangedWeaponPrefab = Resources.Load(sDFTreeNode["rangedWeaponPrefab"]) as GameObject;
-		SetRangeAttackMode(false);
-		if (CheckAbilitySelected("KatanaSlash") || CheckAbilitySelected("LifeSteal"))
-		{
-			mKatanaSlashFXPrefab = Resources.Load(sDFTreeNode["meleeSlashFXPrefab"]) as GameObject;
-		}
-		if (WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm == "wealth" || WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm.Contains("+wealth"))
-		{
-			base.controller.SpawnEffectAtJoint(Resources.Load("FX/Magnet") as GameObject, "body_effect", true);
+			return base.meleeDamage * meleeDamageModifier;
 		}
 	}
 
-	public static float GetHealthThreshold(int numblockLost, float maxHealth)
+	public override float bowDamage
 	{
-		numblockLost = Mathf.Clamp(numblockLost, 0, 2);
-		float num = maxHealth / 3f * 0.965f;
-		return maxHealth - num * (float)numblockLost;
+		get
+		{
+			return base.bowDamage * meleeDamageModifier;
+		}
 	}
 
-	public static CharacterStats GetHeroStats()
+	public GameObject mountObject { get; private set; }
+
+	public GameObject horseModel { get; private set; }
+
+	public GameObject heroModel { get; private set; }
+
+	public GameObject heroObject { get; private set; }
+
+	public float mountedHealRate { get; private set; }
+
+	public bool NoAttack { get; set; }
+
+	public Hero(Transform spawnPoint, int playerId)
 	{
+		string heroID = Singleton<Profile>.Instance.heroID;
+		if (playerId != 0)
+		{
+			heroID = Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.heroId;
+		}
+		Init(spawnPoint.position, playerId, heroID, playerId == 0);
+	}
+
+	public Hero(Vector3 spawnPoint, int playerId, string heroID, bool isLocalPlayer)
+	{
+		Init(spawnPoint, playerId, heroID, isLocalPlayer);
+	}
+
+	public static CharacterStats GetHeroStats(HeroSchema mainData, int ownerId)
+	{
+		if (mainData == null)
+		{
+			mainData = Singleton<HeroesDatabase>.Instance[Singleton<Profile>.Instance.heroID];
+		}
+		int heroLevel = Singleton<Profile>.Instance.heroLevel;
+		int level = Singleton<Profile>.Instance.swordLevel;
+		int bowLevel = Singleton<Profile>.Instance.bowLevel;
+		if (ownerId != 0)
+		{
+			heroLevel = Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.heroLevel;
+			level = Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.meleeLevel;
+			bowLevel = Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.bowLevel;
+		}
 		CharacterStats result = default(CharacterStats);
 		result.isPlayer = true;
 		result.knockbackResistance = 100;
-		float num = 1f;
-		if (WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm == "berserk" || WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm.Contains("+berserk"))
-		{
-			num = float.Parse(Singleton<CharmsDatabase>.instance.GetAttribute(WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm, "heroDamageMultiplier"));
-			if (num < 1f)
-			{
-				num = 1f;
-				Debug.Log("WARNING: problem with the stat 'heroDamageMultiplier' for charm: " + WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm);
-			}
-		}
-		SDFTreeNode root = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Heroes/" + Singleton<Profile>.instance.heroID);
-		result.maxHealth = InfiniteUpgrades.Extrapolate<float>(root, "infiniteUpgradeHealth", "health", Singleton<Profile>.instance.heroLevel);
+		result.maxHealth = mainData.MaxHealth(heroLevel);
 		result.health = result.maxHealth;
-		result.autoHealthRecovery = InfiniteUpgrades.Extrapolate<float>(root, "infiniteUpgradeHealthRecovery", "healthRecovery", Singleton<Profile>.instance.heroLevel);
-		result.speed = InfiniteUpgrades.SnapToHighest<float>(root, "speed", Singleton<Profile>.instance.heroLevel);
-		SDFTreeNode sDFTreeNode = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Weapons/" + Singleton<Profile>.instance.swordID);
-		if (sDFTreeNode.hasAttribute("isBladeWeapon"))
+		result.autoHealthRecovery = mainData.HealthRecovery(heroLevel);
+		result.speed = mainData.GetLevel(heroLevel).speed;
+		WeaponSchema meleeWeapon = mainData.MeleeWeapon;
+		result.meleeWeaponIsABlade = meleeWeapon.isBladeWeapon;
+		result.meleeAttackRange = meleeWeapon.GetLevel(level).attackRange;
+		result.meleeAttackDamage += meleeWeapon.Damage(level);
+		result.meleeAttackFrequency = meleeWeapon.GetLevel(level).attackFrequency;
+		result.knockbackPower = meleeWeapon.GetLevel(level).knockbackPower;
+		switch ((ownerId != 0) ? Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.swordsCollected : Singleton<Profile>.Instance.MultiplayerData.CollectionLevel("Sword"))
 		{
-			result.meleeWeaponIsABlade = bool.Parse(sDFTreeNode["isBladeWeapon"]);
+		case 1:
+			result.meleeAttackDamage *= 1.05f;
+			break;
+		case 2:
+			result.meleeAttackDamage *= 1.1f;
+			break;
+		case 3:
+			result.meleeAttackDamage *= 1.2f;
+			break;
 		}
-		result.meleeAttackRange = InfiniteUpgrades.SnapToHighest<float>(sDFTreeNode, "attackRange", Singleton<Profile>.instance.swordLevel);
-		result.meleeAttackDamage += InfiniteUpgrades.Extrapolate<float>(sDFTreeNode, "infiniteUpgradeDamage", "damage", Singleton<Profile>.instance.swordLevel);
-		result.meleeAttackFrequency = InfiniteUpgrades.SnapToHighest<float>(sDFTreeNode, "attackFrequency", Singleton<Profile>.instance.swordLevel);
-		result.knockbackPower = InfiniteUpgrades.SnapToHighest<int>(sDFTreeNode, "knockbackPower", Singleton<Profile>.instance.swordLevel);
-		result.meleeAttackDamage *= num;
-		bool flag = Singleton<PlayModesManager>.instance.CheckFlag("allowBowOnFirstWave1");
+		bool flag = Singleton<PlayModesManager>.Instance.selectedModeData.allowBowOnFirstWave1;
 		if (!flag)
 		{
-			flag = Singleton<Profile>.instance.waveToBeat > 1 || Singleton<Profile>.instance.GetWaveLevel(1) > 1;
+			flag = Singleton<Profile>.Instance.waveAllowBow;
 		}
 		if (flag)
 		{
-			SDFTreeNode root2 = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Weapons/" + Singleton<Profile>.instance.bowID);
-			result.bowAttackRange = InfiniteUpgrades.SnapToHighest<float>(root2, "attackRange", Singleton<Profile>.instance.bowLevel);
-			result.bowAttackDamage = InfiniteUpgrades.Extrapolate<float>(root2, "infiniteUpgradeDamage", "damage", Singleton<Profile>.instance.bowLevel);
-			result.bowAttackFrequency = InfiniteUpgrades.SnapToHighest<float>(root2, "attackFrequency", Singleton<Profile>.instance.bowLevel);
-			result.projectile = (Projectile.EProjectileType)(int)Enum.Parse(typeof(Projectile.EProjectileType), InfiniteUpgrades.SnapToHighest<string>(root2, "projectile", Singleton<Profile>.instance.bowLevel));
-			result.bowAttackDamage *= num;
+			WeaponSchema rangedWeapon = mainData.RangedWeapon;
+			result.bowAttackRange = rangedWeapon.GetLevel(bowLevel).attackRange;
+			result.bowAttackDamage = rangedWeapon.Damage(bowLevel);
+			result.bowAttackFrequency = rangedWeapon.GetLevel(bowLevel).attackFrequency;
+			result.projectile = rangedWeapon.GetLevel(bowLevel).projectile.Key;
+			result.knockbackPowerRanged = rangedWeapon.GetLevel(bowLevel).knockbackPower;
+			DOTInfo dOTInfo = default(DOTInfo);
+			dOTInfo.ratio = rangedWeapon.GetLevel(bowLevel).DOTDamageRatio;
+			dOTInfo.duration = rangedWeapon.GetLevel(bowLevel).DOTDuration;
+			dOTInfo.interval = rangedWeapon.GetLevel(bowLevel).DOTInterval;
+			result.dotInfo = dOTInfo;
+			switch ((ownerId != 0) ? Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.bowsCollected : Singleton<Profile>.Instance.MultiplayerData.CollectionLevel("bow"))
+			{
+			case 1:
+				result.bowAttackDamage *= 1.05f;
+				break;
+			case 2:
+				result.bowAttackDamage *= 1.1f;
+				break;
+			case 3:
+				result.bowAttackDamage *= 1.2f;
+				break;
+			}
 		}
-		if (WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm == "power" || WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm.Contains("+power"))
+		if (ownerId == 0 && WeakGlobalMonoBehavior<InGameImpl>.Instance != null && WeakGlobalMonoBehavior<InGameImpl>.Instance.HasPowerCharm())
 		{
-			result.criticalChance = float.Parse(Singleton<CharmsDatabase>.instance.GetAttribute(WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm, "criticalChance"));
-			result.criticalMultiplier = float.Parse(Singleton<CharmsDatabase>.instance.GetAttribute(WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm, "criticalMultiplier"));
+			CharmSchema charmSchema = Singleton<CharmsDatabase>.Instance[WeakGlobalMonoBehavior<InGameImpl>.Instance.activeCharm];
+			result.criticalChance = charmSchema.criticalChance;
+			result.criticalMultiplier = charmSchema.multiplier;
 		}
 		else
 		{
-			SDFTreeNode sDFTreeNode2 = Singleton<Config>.instance.root.to("DefaultCriticals");
-			if (sDFTreeNode2 == null)
+			result.criticalChance = Singleton<Config>.Instance.data.GetFloat(TextDBSchema.ChildKey("DefaultCriticals", "chance"));
+			result.criticalMultiplier = Singleton<Config>.Instance.data.GetFloat(TextDBSchema.ChildKey("DefaultCriticals", "multiplier"));
+		}
+		result.canMeleeFliers = mainData.canMeleeFliers;
+		if (ownerId != 0 && Singleton<Profile>.Instance.MultiplayerData.TweakValues != null)
+		{
+			result.meleeAttackDamage *= Singleton<Profile>.Instance.MultiplayerData.TweakValues.heroMeleeDamage;
+			result.bowAttackDamage *= Singleton<Profile>.Instance.MultiplayerData.TweakValues.heroRangedDamage;
+			result.speed *= Singleton<Profile>.Instance.MultiplayerData.TweakValues.heroMoveSpeed;
+			result.health *= Singleton<Profile>.Instance.MultiplayerData.TweakValues.heroHealth;
+			result.maxHealth *= Singleton<Profile>.Instance.MultiplayerData.TweakValues.heroHealth;
+			result.autoHealthRecovery *= Singleton<Profile>.Instance.MultiplayerData.TweakValues.heroHealthRegen;
+		}
+		return result;
+	}
+
+	public static string MaterialKey(string heroID, int collectionLevel)
+	{
+		switch (collectionLevel)
+		{
+		case 1:
+		case 2:
+		case 3:
+			return DataBundleRuntime.TableRecordKey("HeroMaterials", heroID + "_ArmorSet");
+		default:
+			return DataBundleRuntime.TableRecordKey("HeroMaterials", heroID + "_Normal");
+		}
+	}
+
+	private void AddExtraAnims(string id, GameObject character)
+	{
+		if (!Singleton<Profile>.Instance.inMultiplayerWave)
+		{
+			return;
+		}
+		string text = string.Empty;
+		switch (id)
+		{
+		case "HeroAttack":
+			text = "heroa";
+			break;
+		case "HeroBalanced":
+			text = "herob";
+			break;
+		case "HeroDefense":
+			text = "herod";
+			break;
+		case "HeroLeadership":
+			text = "herol";
+			break;
+		case "HeroAbility":
+			id = "HeroAbilities";
+			text = "heroab";
+			break;
+		}
+		GameObject gameObject = Resources.Load("Characters/" + id + "/" + text + "@stun") as GameObject;
+		if (!(gameObject != null))
+		{
+			return;
+		}
+		Animation component = gameObject.GetComponent<Animation>();
+		IEnumerator enumerator = component.GetEnumerator();
+		while (enumerator.MoveNext())
+		{
+			AnimationState animationState = (AnimationState)enumerator.Current;
+			AnimationClip clip = animationState.clip;
+			if (!(clip.name == "stun"))
 			{
-				Debug.Log("ERROR: Could not find [DefaultCriticals] in Config.txt");
+				continue;
+			}
+			Animation[] componentsInChildren = character.GetComponentsInChildren<Animation>();
+			Animation[] array = componentsInChildren;
+			foreach (Animation animation in array)
+			{
+				if (animation.GetClip("stun") == null)
+				{
+					animation.AddClip(clip, "stun");
+				}
+			}
+		}
+	}
+
+	private void Init(Vector3 spawnPoint, int playerId, string heroID, bool isLocalPlayer)
+	{
+		base.isPlayer = true;
+		base.ownerId = playerId;
+		mIsLeftToRightGameplay = Singleton<PlayModesManager>.Instance.gameDirection == PlayModesManager.GameDirection.LeftToRight;
+		if (playerId == 1)
+		{
+			mIsLeftToRightGameplay = !mIsLeftToRightGameplay;
+		}
+		meleeDamageModifier = 1f;
+		rangedDamageModifier = 1f;
+		bool includeSounds = playerId != 0 || isLocalPlayer;
+		Singleton<HeroesDatabase>.Instance.LoadInGameData(heroID, playerId);
+		mainData = Singleton<HeroesDatabase>.Instance[heroID];
+		if (Singleton<Profile>.Instance.inBonusWave)
+		{
+			base.controlledObject = CharacterSchema.Deserialize(mainData.resourcesGhost, includeSounds);
+		}
+		else
+		{
+			base.controlledObject = CharacterSchema.Deserialize(mainData.resources, includeSounds);
+		}
+		base.controller.position = spawnPoint;
+		base.controller.updatesNoSnap = 0;
+		base.controller.MaxBackPedalTime = Singleton<HeroesDatabase>.Instance[Singleton<Profile>.Instance.heroID].backPedalTime;
+		heroObject = base.controlledObject;
+		heroModel = base.controller.animPlayer.jointAnimation.gameObject;
+		AddExtraAnims(heroID, heroObject);
+		CheckForUpgradeFXArmor(heroID);
+		ResetController();
+		SetDefaultFacing();
+		SetMirroredSkeleton(base.controller.facing == FacingType.Left);
+		base.stats = GetHeroStats(mainData, base.ownerId);
+		if (WeakGlobalMonoBehavior<InGameImpl>.Exists && playerId == 0 && isLocalPlayer)
+		{
+			mPlayerControls = new HeroControls();
+			mPlayerControls.onMoveLeft = onMoveLeft;
+			mPlayerControls.onMoveRight = onMoveRight;
+			mPlayerControls.onDontMove = onDontMove;
+		}
+		CheckForUpgradeFXSword();
+		if (!Singleton<Profile>.Instance.inBonusWave)
+		{
+			RestoreMeleeWeapon();
+		}
+		if (base.ownerId != 0 && Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent != null)
+		{
+			base.resourceDrops.guaranteedCoinsAward = 25 * (Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.heroLevel + Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.meleeLevel + Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.bowLevel);
+		}
+		CheckForUpgradeFXBow();
+		RestoreRangedWeapon();
+		SetRangeAttackMode(false);
+		NoAttack = true;
+		if (WeakGlobalMonoBehavior<InGameImpl>.Instance != null && WeakGlobalMonoBehavior<InGameImpl>.Instance.HasWealthCharm())
+		{
+			SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource("Assets/Game/Resources/FX/Magnet.prefab", 1);
+			if (cachedResource != null)
+			{
+				base.controller.SpawnEffectAtJoint(cachedResource.Resource as GameObject, "body_effect", true);
+			}
+		}
+		if (base.ownerId != 0)
+		{
+			ActivateHealthBar();
+		}
+		base.BlocksHeroMovement = mainData.blocksHeroMovement || SingletonSpawningMonoBehaviour<DesignerVariables>.Instance.GetVariable("HeroBlockMovement", true);
+		if (!WeakGlobalMonoBehavior<InGameImpl>.Exists)
+		{
+			return;
+		}
+		mLeftConstraint = WeakGlobalMonoBehavior<InGameImpl>.Instance.heroWalkLeftEdge.position.z;
+		mRightConstraint = WeakGlobalMonoBehavior<InGameImpl>.Instance.heroWalkRightEdge.position.z;
+		if (Singleton<Profile>.Instance.inVSMultiplayerWave)
+		{
+			if (base.LeftToRight)
+			{
+				mLeftConstraint -= 1f;
+				mRightConstraint = WeakGlobalMonoBehavior<InGameImpl>.Instance.enemiesSpawnAreaRight.transform.position.z - 0.288f;
 			}
 			else
 			{
-				result.criticalChance = float.Parse(sDFTreeNode2["chance"]);
-				result.criticalMultiplier = float.Parse(sDFTreeNode2["multiplier"]);
+				mRightConstraint += 1f;
+				mLeftConstraint = WeakGlobalMonoBehavior<InGameImpl>.Instance.helpersSpawnAreaLeft.transform.position.z + 0.288f;
+			}
+			if (WeakGlobalInstance<CollectableManager>.Instance != null && base.ownerId == 0)
+			{
+				WeakGlobalInstance<CollectableManager>.Instance.LeftEdge = mLeftConstraint + 0.16f;
+				WeakGlobalInstance<CollectableManager>.Instance.RightEdge = mRightConstraint - 0.16f;
 			}
 		}
-		return result;
+	}
+
+	private void CheckForUpgradeFXSword()
+	{
+		if ((base.ownerId == 0 && Singleton<Profile>.Instance.MultiplayerData.CollectionLevel("Sword") > 0) || (base.ownerId != 0 && Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.swordsCollected > 0))
+		{
+			SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource("Assets/Game/Resources/FX/WeaponsCollectionsGlow.prefab", 1);
+			if (cachedResource != null)
+			{
+				mMPMeleeWeaponUpgradePrefab = cachedResource.Resource as GameObject;
+			}
+		}
+	}
+
+	private void CheckForUpgradeFXBow()
+	{
+		if ((base.ownerId == 0 && Singleton<Profile>.Instance.MultiplayerData.CollectionLevel("Bow") > 0) || (base.ownerId != 0 && Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.bowsCollected > 0))
+		{
+			SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource("Assets/Game/Resources/FX/WeaponsCollectionsGlow.prefab", 1);
+			if (cachedResource != null)
+			{
+				mMPRangedWeaponUpgradePrefab = cachedResource.Resource as GameObject;
+			}
+		}
+	}
+
+	private void CheckForUpgradeFXArmor(string heroID)
+	{
+		int num = -1;
+		num = ((base.ownerId != 0) ? Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.armorLevel : Singleton<Profile>.Instance.MultiplayerData.CollectionLevel("Armor"));
+		Renderer componentInChildren = heroModel.GetComponentInChildren<Renderer>();
+		if (componentInChildren != null)
+		{
+			string key = MaterialKey(heroID, num);
+			DataBundleRecordKey dataBundleRecordKey = new DataBundleRecordKey(key);
+			matLookupHandle = new DataBundleRecordHandle<MaterialLookupSchema>(dataBundleRecordKey);
+			matLookupHandle.Load(null);
+			if (matLookupHandle.Data != null && matLookupHandle.Data.material != null)
+			{
+				Material material = SchemaFieldAdapter.Deserialize(matLookupHandle.Data.material);
+				if (material != null)
+				{
+					componentInChildren.sharedMaterial = SchemaFieldAdapter.Deserialize(material);
+				}
+			}
+		}
+		if (num > 0)
+		{
+			DataBundleRecordKey dataBundleRecordKey2 = new DataBundleRecordKey("CollectionSet", num.ToString());
+			mCollectionArmorSchema = DataBundleRuntime.Instance.InitializeRecord<ArmorLevelSchema>(dataBundleRecordKey2);
+			if (mCollectionArmorSchema != null)
+			{
+				GameObject visualFX = mCollectionArmorSchema.visualFX;
+				if (visualFX != null)
+				{
+					base.controller.SpawnEffectAtJoint(visualFX, "body_effect", true);
+				}
+			}
+		}
+		int level = Singleton<Profile>.Instance.armorLevel;
+		if (base.ownerId != 0)
+		{
+			level = Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.armorCollected;
+		}
+		mCharacterArmorSchema = mainData.GetArmorLevel(level);
+		if (mCharacterArmorSchema != null)
+		{
+			GameObject visualFX2 = mCharacterArmorSchema.visualFX;
+			if (visualFX2 != null)
+			{
+				base.controller.SpawnEffectAtJoint(visualFX2, "body_effect", true);
+			}
+		}
+	}
+
+	private void UpdateFSBloodEffect()
+	{
+		if (HUDBloodEffect == null)
+		{
+			return;
+		}
+		if (base.health == 0f)
+		{
+			FSBloodEffectFadeLevel = Mathf.Max(0f, FSBloodEffectFadeLevel - Time.deltaTime * 1f);
+		}
+		else if (WeakGlobalMonoBehavior<InGameImpl>.Instance.gate.health > 0f && base.isInLeniencyMode)
+		{
+			if (!mBloodEffectActive)
+			{
+				mBloodEffectActive = true;
+				mBloodEffectSprite.gameObject.SetActive(mBloodEffectActive);
+			}
+			if (FSBloodEffectFadeLevel == 0f)
+			{
+				FSBloodEffectFadeLevel = 0.6f;
+				mPulseDir = -1f;
+			}
+			else
+			{
+				FSBloodEffectFadeLevel = Mathf.Clamp(FSBloodEffectFadeLevel + mPulseDir * (Time.deltaTime * 1f), 0.4f, 0.6f);
+				if (FSBloodEffectFadeLevel == 0.4f)
+				{
+					mPulseDir = 1f;
+				}
+				else if (FSBloodEffectFadeLevel == 0.6f)
+				{
+					mPulseDir = -1f;
+				}
+			}
+		}
+		else
+		{
+			FSBloodEffectFadeLevel = 0f;
+		}
+		if (mBloodEffectActive)
+		{
+			if (FSBloodEffectFadeLevel == 0f)
+			{
+				mBloodEffectActive = false;
+				mBloodEffectSprite.gameObject.SetActive(mBloodEffectActive);
+			}
+			else
+			{
+				mBloodEffectSprite.Color = new Color(1f, 1f, 1f, FSBloodEffectFadeLevel);
+			}
+		}
 	}
 
 	public override void Update()
 	{
 		base.Update();
-		UpdateHealthThreshold();
 		if (base.health > 0f)
 		{
-			mPlayerControls.Update();
+			UpdateConstraints();
+			if (mPlayerControls != null)
+			{
+				mPlayerControls.Update();
+			}
 		}
 		UpdateAttacks();
+		UpdateMount();
+		UpdateFSBloodEffect();
+	}
+
+	private void UpdateConstraints()
+	{
+		Character[] array = WeakGlobalMonoBehavior<InGameImpl>.Instance.CharacterMgr.GetPlayerCharacters(1 - base.ownerId).ToArray();
+		float num = -10000f;
+		if (base.LeftToRight)
+		{
+			num = 10000f;
+		}
+		Character character = null;
+		Character[] array2 = array;
+		foreach (Character character2 in array2)
+		{
+			if (character2.health > 0f && character2.BlocksHeroMovement && ((base.LeftToRight && character2.transform.position.z < num && character2.transform.position.z > base.transform.position.z) || (!base.LeftToRight && character2.transform.position.z > num && character2.transform.position.z < base.transform.position.z)))
+			{
+				character = character2;
+				num = character2.transform.position.z;
+			}
+		}
+		if (character != null)
+		{
+			if (mIsLeftToRightGameplay)
+			{
+				base.controller.constraintRight = Mathf.Min(mRightConstraint, character.position.z - kEnemyHeroKeepDist);
+			}
+			else
+			{
+				base.controller.constraintLeft = Mathf.Max(mLeftConstraint, character.position.z + kEnemyHeroKeepDist);
+			}
+		}
+		else
+		{
+			base.controller.constraintLeft = mLeftConstraint;
+			base.controller.constraintRight = mRightConstraint;
+		}
 	}
 
 	public override void Destroy()
 	{
+		if (mPlayerControls != null)
+		{
+			mPlayerControls.Dispose();
+			mPlayerControls = null;
+		}
+		if (WeakGlobalMonoBehavior<InGameImpl>.Instance == null)
+		{
+			Object.Destroy(base.controlledObject);
+		}
+		if (matLookupHandle != null)
+		{
+			matLookupHandle.Unload();
+		}
 		base.Destroy();
 	}
 
 	public void UpdateAttacks()
 	{
-		NotifyTutorials_InRangeOfAttack(false);
 		if (!base.isEffectivelyIdle || base.controller.isMoving)
 		{
 			return;
 		}
-		if (WeakGlobalSceneBehavior<InGameImpl>.instance.playerWon)
+		if (WeakGlobalMonoBehavior<InGameImpl>.Instance.playerWon && base.ownerId == 0)
 		{
 			base.controller.PlayVictoryAnim();
 		}
 		else
 		{
-			if (Singleton<Profile>.instance.inBonusWave)
+			if (Singleton<Profile>.Instance.inBonusWave)
 			{
 				return;
 			}
 			if (IsInMeleeRangeOfOpponent(true))
 			{
-				NotifyTutorials_InRangeOfAttack(true);
 				SetRangeAttackMode(false);
 				if (base.canMeleeAttack)
 				{
 					StartMeleeAttackDelayTimer();
 					base.controller.Attack(base.meleeAttackFrequency);
+					NoAttack = false;
 				}
 			}
 			else if (IsInBowRangeOfOpponent())
 			{
-				NotifyTutorials_InRangeOfAttack(true);
 				SetRangeAttackMode(true);
 				if (base.canUseRangedAttack)
 				{
 					StartRangedAttackDelayTimer();
-					base.singleAttackTarget = WeakGlobalInstance<CharactersManager>.instance.GetBestRangedAttackTarget(this, base.bowAttackGameRange);
+					base.singleAttackTarget = WeakGlobalInstance<CharactersManager>.Instance.GetBestRangedAttackTarget(this, base.bowAttackGameRange);
 					if (base.singleAttackTarget != null)
 					{
-						base.controller.RangeAttack(base.meleeAttackFrequency);
+						NoAttack = false;
+						base.controller.RangeAttack(base.bowAttackFrequency);
 					}
 				}
 			}
@@ -209,327 +619,471 @@ public class Hero : Character
 		}
 	}
 
-	public override void RecievedAttack(EAttackType attackType, float damage)
+	private float CalcDamageRemoved(EAttackType attackType, float damage, Character attacker, ArmorLevelSchema armorSchema, bool canReflect)
 	{
+		float num = damage;
+		if (armorSchema != null)
+		{
+			switch (attackType)
+			{
+			case EAttackType.Blade:
+			case EAttackType.BladeCritical:
+			case EAttackType.Blunt:
+			case EAttackType.BluntCritical:
+			case EAttackType.Slice:
+			case EAttackType.Trample:
+			case EAttackType.Stomp:
+				if (Random.Range(0f, 1f) <= armorSchema.meleeBlockRatio)
+				{
+					damage = 0f;
+					if (armorSchema.blockFX != null)
+					{
+						base.controller.SpawnEffectAtJoint(armorSchema.blockFX, "impact_target", false);
+					}
+				}
+				else
+				{
+					damage *= armorSchema.meleeDamageModifier;
+				}
+				break;
+			case EAttackType.Arrow:
+			case EAttackType.Shuriken:
+			case EAttackType.FireArrow:
+			case EAttackType.Explosion:
+			case EAttackType.Bullet:
+				if (Random.Range(0f, 1f) <= armorSchema.rangedBlockRatio)
+				{
+					damage = 0f;
+					if (armorSchema.blockFX != null)
+					{
+						base.controller.SpawnEffectAtJoint(armorSchema.blockFX, "impact_target", false);
+					}
+				}
+				else
+				{
+					damage *= armorSchema.rangedDamageModifier;
+				}
+				break;
+			}
+			if (canReflect && armorSchema.reflectDamageRatio > 0f && attacker != null)
+			{
+				attacker.RecievedAttack(attackType, num, this, false);
+			}
+		}
+		return num - damage;
+	}
+
+	public override void RecievedAttack(EAttackType attackType, float damage, Character attacker, bool canReflect)
+	{
+		if (base.invuln)
+		{
+			return;
+		}
 		float num = base.health;
-		base.RecievedAttack(attackType, damage);
+		float num2 = CalcDamageRemoved(attackType, damage, attacker, mCharacterArmorSchema, canReflect);
+		float num3 = CalcDamageRemoved(attackType, damage, attacker, mCollectionArmorSchema, canReflect);
+		damage -= num2;
+		damage -= num3;
+		if (base.mountedHealth > 0f)
+		{
+			base.mountedHealth -= damage;
+			if (!(base.mountedHealth <= 0f))
+			{
+				RecievedAttackFX(attackType, damage, attacker);
+				return;
+			}
+			damage = 0f - base.mountedHealth;
+			DoDismount();
+		}
+		base.RecievedAttack(attackType, damage, attacker, canReflect);
 		if (base.health > 0f && !mPerformingSpecialAttack)
 		{
-			float healthThreshold = GetHealthThreshold(2, base.maxHealth);
-			if (num > healthThreshold && base.health <= healthThreshold)
+			float num4 = base.maxHealth / 3f * 2f;
+			if (num > num4 && base.health <= num4)
 			{
 				SetRangeAttackMode(false);
-				ForceKnockback();
+				ForceKnockback(Vector3.zero);
 			}
 		}
 	}
 
-	public void Revive()
+	public override void RecievedHealing(float healAmount)
+	{
+		base.RecievedHealing(healAmount);
+		if (base.mountedHealthMax > 0f)
+		{
+			base.mountedHealth += healAmount;
+			base.mountedHealth = Mathf.Min(base.mountedHealth, base.mountedHealthMax);
+		}
+	}
+
+	public void UpdateMount()
+	{
+		Character mount = WeakGlobalInstance<CharactersManager>.Instance.GetMount(base.ownerId);
+		if (base.health <= 0f)
+		{
+			if (mount != null && mount.health > 0f && mountObject == null)
+			{
+				mount.health = 0f;
+			}
+			return;
+		}
+		if (mount != null && mount.isActive && mountObject == null && mount.health > 0f)
+		{
+			float f = mount.position.z - base.position.z;
+			if (Mathf.Abs(f) < 0.1f)
+			{
+				Renderer[] componentsInChildren = mount.controlledObject.GetComponentsInChildren<Renderer>();
+				foreach (Renderer renderer in componentsInChildren)
+				{
+					if (renderer.enabled)
+					{
+						DoMount(mount);
+						break;
+					}
+				}
+			}
+		}
+		if (base.mountedHealthMax > 0f && base.isHealing)
+		{
+			base.mountedHealth += mountedHealRate * Time.deltaTime;
+			base.mountedHealth = Mathf.Min(base.mountedHealth, base.mountedHealthMax);
+		}
+	}
+
+	private void ResetController()
+	{
+		if (WeakGlobalMonoBehavior<InGameImpl>.Instance != null)
+		{
+			base.controller.constraintLeft = WeakGlobalMonoBehavior<InGameImpl>.Instance.heroWalkLeftEdge.position.z;
+			base.controller.constraintRight = WeakGlobalMonoBehavior<InGameImpl>.Instance.heroWalkRightEdge.position.z;
+			if (Singleton<Profile>.Instance.inVSMultiplayerWave)
+			{
+				Hero hero = WeakGlobalMonoBehavior<InGameImpl>.Instance.GetHero(1 - base.ownerId);
+				if (hero != null && hero.health > 0f)
+				{
+					if (mIsLeftToRightGameplay)
+					{
+						base.controller.constraintRight = hero.position.z - kEnemyHeroKeepDist;
+					}
+					else
+					{
+						base.controller.constraintLeft = hero.position.z + kEnemyHeroKeepDist;
+					}
+				}
+			}
+		}
+		base.controller.StopWalking();
+	}
+
+	private void SetAttachedToCharacter(Character newMount, string jointName)
+	{
+		if (newMount != null)
+		{
+			if (base.health == 0f)
+			{
+				return;
+			}
+			mountObject = newMount.controlledObject;
+			mountObject.transform.parent = heroObject.transform;
+			mountObject.transform.localPosition = Vector3.zero;
+			horseModel = newMount.controller.animPlayer.jointAnimation.gameObject;
+			Transform[] componentsInChildren = horseModel.GetComponentsInChildren<Transform>(true);
+			foreach (Transform transform in componentsInChildren)
+			{
+				if (transform.name.Equals(jointName))
+				{
+					heroModel.transform.parent = transform;
+					break;
+				}
+			}
+			heroModel.transform.localPosition = Vector3.zero;
+			base.controller.animPlayer.RegisterNewChildAnimationPlayer(horseModel.GetComponent<Animation>());
+			base.controller.animNamePrefix = "horse";
+		}
+		else
+		{
+			Vector3 vector = base.position;
+			heroModel.transform.parent = heroObject.transform;
+			heroModel.transform.localPosition = Vector3.zero;
+			heroModel.transform.localRotation = Quaternion.identity;
+			heroModel.transform.localScale = Vector3.one;
+			heroObject.transform.position = vector;
+			horseModel.transform.parent = mountObject.transform;
+			horseModel.transform.localPosition = Vector3.zero;
+			mountObject.transform.position = vector;
+			mountObject.transform.parent = null;
+			mountObject.SetActive(true);
+			mountObject = null;
+			base.controller.animNamePrefix = string.Empty;
+		}
+		ResetController();
+	}
+
+	private void DoPostMount(Character newMount)
+	{
+		SetAttachedToCharacter(newMount, "warriorhorse:horse_midsection_jnt");
+		mPerformingSpecialAttack = false;
+		base.controller.animPlayer.actionAnimFadeOutSpeed = base.controller.animPlayer.defaultBlendSpeed;
+		ResetInvulnToDefault();
+	}
+
+	private void DoMount(Character newMount)
+	{
+		base.invuln = true;
+		mPerformingSpecialAttack = true;
+		base.mountedHealthMax = newMount.health;
+		base.mountedHealth = base.mountedHealthMax;
+		mountedHealRate = newMount.knockbackResistance;
+		meleeDamageModifier = 1f + newMount.meleeDamage * 0.01f;
+		rangedDamageModifier = 1f + newMount.bowDamage * 0.01f;
+		base.controller.speed = base.stats.speed * (1f + (float)newMount.knockbackPower * 0.01f);
+		WeakGlobalInstance<CharactersManager>.Instance.SetMountActive(false, base.ownerId);
+		base.controller.animPlayer.actionAnimFadeOutSpeed = 0f;
+		base.controller.PerformSpecialActionNoAttack("mount", delegate
+		{
+			DoPostMount(newMount);
+		});
+		base.controller.SetBaseAnim("horseidle");
+		newMount.buffIcon.Clear();
+	}
+
+	private void DoPostDismount()
+	{
+		mPerformingSpecialAttack = false;
+		SetAttachedToCharacter(null, null);
+		meleeDamageModifier = 1f;
+		rangedDamageModifier = 1f;
+		WeakGlobalInstance<CharactersManager>.Instance.SetMountActive(true, base.ownerId);
+		WeakGlobalInstance<CharactersManager>.Instance.KillMount(base.ownerId);
+	}
+
+	private void DoDismount()
 	{
 		mPerformingSpecialAttack = true;
+		base.mountedHealth = 0f;
+		base.mountedHealthMax = 0f;
+		meleeDamageModifier = 0f;
+		rangedDamageModifier = 0f;
+		base.controller.speed = base.stats.speed;
+		DoPostDismount();
+	}
+
+	public void Revive()
+	{
+		if (Singleton<Profile>.Instance.inVSMultiplayerWave && base.BlocksHeroMovement)
+		{
+			if (mIsLeftToRightGameplay)
+			{
+				base.controlledObject.transform.position = WeakGlobalMonoBehavior<InGameImpl>.Instance.heroSpawnPointLeft.position;
+			}
+			else
+			{
+				base.controlledObject.transform.position = WeakGlobalMonoBehavior<InGameImpl>.Instance.heroSpawnPointRight.position;
+			}
+		}
+		Renderer[] componentsInChildren = base.controlledObject.GetComponentsInChildren<Renderer>();
+		foreach (Renderer renderer in componentsInChildren)
+		{
+			renderer.enabled = true;
+		}
+		ProceduralShaderManager.StopShaderEvents((ShaderEvent se) => se.gameObject == base.controlledObject);
+		mHasDOT = false;
 		SetRangeAttackMode(false);
+		if (base.mountedHealth > 0f)
+		{
+			OnReviveAttack(null);
+			return;
+		}
+		mPerformingSpecialAttack = true;
+		base.invuln = true;
 		base.controller.PerformSpecialAction("revive", delegate
 		{
 			OnReviveAttack(null);
 		});
-		base.controller.animEndedCallback = OnSpecialAttackDone;
+		base.controller.animEndedCallback = OnReviveDone;
 	}
 
-	public void DoKatanaSlash(string abilityID)
+	public void ResetInvulnToDefault()
 	{
-		mPerformingSpecialAttack = true;
-		SetRangeAttackMode(false);
-		base.controller.PerformSpecialAction("katanaslash", delegate
-		{
-			OnKatanSlashAttack(abilityID);
-		});
-		base.controller.animEndedCallback = OnSpecialAttackDone;
-		SetDefaultFacing();
-		base.controller.InstantiateObjectOnJoint(mKatanaSlashFXPrefab, "katana_slash_fx");
+		WeakGlobalMonoBehavior<InGameImpl>.Instance.ResetHeroInvulnToDefault(base.ownerId);
 	}
 
-	public void DoSummonLightning(string abilityID)
+	public AbilitySchema[] GetPotentialAbilities()
 	{
-		mPerformingSpecialAttack = true;
-		SetRangeAttackMode(false);
-		base.controller.PerformSpecialAction("summonlightning", delegate
-		{
-			OnSummonLightningAttack(abilityID);
-		});
-		base.controller.animEndedCallback = OnSpecialAttackDone;
-		SetDefaultFacing();
-		GameObject obj = GameObject.FindGameObjectWithTag("Skybox");
-		ProceduralShaderManager.postShaderEvent(new DiffuseFadeInOutShaderEvent(obj, SUILayoutConv.GetColor(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "skyShaderColor")), float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "skyShaderFadeInTimer")), float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "DOTDuration")), float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "skyShaderFadeOutTimer"))));
-		UnityEngine.Object.Instantiate(Resources.Load(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "mainFX")), base.controller.position + new Vector3(0f, float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "EffectYOffset")), float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "attackRange"))), Quaternion.identity);
+		return mainData.Abilities;
 	}
 
 	public void DoGraveHands(string abilityID)
 	{
-		mPerformingSpecialAttack = true;
-		SetRangeAttackMode(false);
-		base.controller.PerformSpecialAction("castforward", delegate
-		{
-		});
-		base.controller.animEndedCallback = OnSpecialAttackDone;
-		SetDefaultFacing();
-		GameObject obj = GameObject.FindGameObjectWithTag("Skybox");
-		float range = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "attackRange"));
-		float num = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "DOTDuration"));
-		ProceduralShaderManager.postShaderEvent(new DiffuseFadeInOutShaderEvent(obj, SUILayoutConv.GetColor(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "skyShaderColor")), float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "skyShaderFadeInTimer")), num, float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "skyShaderFadeOutTimer"))));
-		WeakGlobalInstance<GraveHandsEffect>.instance.Play(range, num);
-		OnGraveHandsAttack(abilityID);
 	}
 
 	public void DoNightOfTheDead(string abilityID)
 	{
-		mPerformingSpecialAttack = true;
-		SetRangeAttackMode(false);
-		base.controller.PerformSpecialAction("castforward", delegate
-		{
-			OnNightOfTheDeadAttack(abilityID);
-		});
-		base.controller.animEndedCallback = OnSpecialAttackDone;
-		SetDefaultFacing();
-	}
-
-	public void DoLethargy(string abilityID)
-	{
-		mPerformingSpecialAttack = true;
-		SetRangeAttackMode(false);
-		base.controller.PerformSpecialAction("castforward", delegate
-		{
-			OnLethargyAttack(abilityID);
-		});
-		base.controller.animEndedCallback = OnSpecialAttackDone;
-		SetDefaultFacing();
-	}
-
-	public void DoDivineIntervention(string abilityID)
-	{
-		mPerformingSpecialAttack = true;
-		SetRangeAttackMode(false);
-		string theAnimName = "castmid";
-		if (Singleton<PlayModesManager>.instance.selectedMode == "zombies")
-		{
-			theAnimName = "castforward";
-		}
-		base.controller.PerformSpecialAction(theAnimName, delegate
-		{
-			OnDivineInterventionAttack(abilityID);
-		});
-		base.controller.animEndedCallback = OnSpecialAttackDone;
-		SetDefaultFacing();
-	}
-
-	public void DoSummonTornado(string abilityID)
-	{
-		mPerformingSpecialAttack = true;
-		SetRangeAttackMode(false);
-		base.controller.PerformSpecialAction("castforward", delegate
-		{
-			OnSummonTornadoAttack(abilityID);
-		});
-		base.controller.animEndedCallback = OnSpecialAttackDone;
-		SetDefaultFacing();
 	}
 
 	public void DoGroundShock(string abilityID)
 	{
-		mPerformingSpecialAttack = true;
-		SetRangeAttackMode(false);
-		base.controller.PerformSpecialAction("castforward", delegate
-		{
-			OnGroundShockAttack(abilityID);
-		});
-		base.controller.animEndedCallback = OnSpecialAttackDone;
-		SetDefaultFacing();
 	}
 
-	public void DoGiantWave(string abilityID)
+	private void DoAbility(string animName, AbilitiesDatabase.OnAbilityActivateFunc abilityActivateFunction, AbilitiesDatabase.OnAbilityExecuteFunc abilityExecutionFunction)
 	{
 		mPerformingSpecialAttack = true;
 		SetRangeAttackMode(false);
-		string theAnimName = "castmid";
-		if (Singleton<PlayModesManager>.instance.selectedMode == "zombies")
+		if (abilityActivateFunction != null)
 		{
-			theAnimName = "castforward";
+			abilityActivateFunction(this);
 		}
-		base.controller.PerformSpecialAction(theAnimName, delegate
+		if (!string.IsNullOrEmpty(animName))
 		{
-			OnGiantWaveAttack(abilityID);
-		});
-		base.controller.animEndedCallback = OnSpecialAttackDone;
-		SetDefaultFacing();
-	}
-
-	private void OnKatanSlashAttack(string abilityID)
-	{
-		float num = Singleton<AbilitiesDatabase>.instance.Extrapolate<float>(abilityID, "infiniteUpgradeDamage", "damage");
-		float num2 = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "damageMultEachTarget"));
-		float num3 = num * float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "lifeSteal"));
-		List<Character> enemiesAhead = GetEnemiesAhead(float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "attackRange")));
-		bool flag = false;
-		foreach (Character item in enemiesAhead)
-		{
-			flag = true;
-			item.RecievedAttack(EAttackType.Slice, num);
-			num *= num2;
+			base.controller.PerformSpecialAction(animName, delegate
+			{
+				abilityExecutionFunction(this);
+			});
+			base.controller.animEndedCallback = OnSpecialAttackDone;
+			SetDefaultFacing();
 		}
-		if (flag)
+		else
 		{
-			base.health += num3;
+			abilityExecutionFunction(this);
+			mPerformingSpecialAttack = false;
 		}
 	}
 
-	private void OnSummonLightningAttack(string abilityID)
+	public bool CanUseAbility()
 	{
-		List<Character> enemiesAhead = GetEnemiesAhead(float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "attackRange")));
-		float num = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "DOTDuration"));
-		float damage = Singleton<AbilitiesDatabase>.instance.Extrapolate<float>(abilityID, "infiniteUpgradeInitialDamage", "InitalDamage");
-		float damagePerTick = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "DOTDamage"));
-		float tickFrequency = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "DOTFrequency"));
-		float fadeInTime = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "ColorEffectFadeIn"));
-		float fadeOutTime = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "ColorEffectFadeOut"));
-		float holdTime = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "ColorEffectHoldColor"));
-		GameObject prefab = Resources.Load(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "smokeFX")) as GameObject;
-		GameObject prefab2 = Resources.Load(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "chargeFX")) as GameObject;
-		foreach (Character item in enemiesAhead)
+		return base.health > 0f && !base.isInKnockback;
+	}
+
+	public bool DoAbility(string abilityName)
+	{
+		return DoAbility(abilityName, false);
+	}
+
+	public bool DoAbility(string abilityName, bool bForce)
+	{
+		if (!bForce && (!CanUseAbility() || mPerformingSpecialAttack))
 		{
-			UnityEngine.Object.Destroy(item.controller.InstantiateObjectOnJoint(prefab, "head_effect"), num);
-			UnityEngine.Object.Destroy(item.controller.InstantiateObjectOnJoint(prefab2, "body_effect"), num);
-			item.RecievedAttack(EAttackType.Lightning, damage);
-			item.SetDamageOverTime(damagePerTick, tickFrequency, num);
-			item.MaterialColorFlicker(Color.yellow, fadeInTime, holdTime, fadeOutTime, num);
+			return false;
+		}
+		string animName = string.Empty;
+		AbilitiesDatabase.OnAbilityActivateFunc activateFunc = null;
+		AbilitiesDatabase.OnAbilityExecuteFunc execFunc = null;
+		Singleton<AbilitiesDatabase>.Instance.GetAbilityInfoByName(abilityName, out animName, out activateFunc, out execFunc);
+		DoAbility(animName, activateFunc, execFunc);
+		AbilitySchema schema = Singleton<AbilitiesDatabase>.Instance.GetSchema(abilityName);
+		if (schema != null && schema.soundTheme != null)
+		{
+			UdamanSoundThemePlayer soundPlayer = base.controller.SoundPlayer;
+			if (soundPlayer != null)
+			{
+				if (schema.SoundEvent != null)
+				{
+					soundPlayer.PlaySoundEvent(schema.SoundEvent, schema.soundTheme);
+				}
+				else
+				{
+					soundPlayer.PlaySoundEvent("Spawn", schema.soundTheme);
+				}
+			}
+		}
+		return true;
+	}
+
+	public static void DoLegendaryStrike(string abilityName, int playerId)
+	{
+		string animName = string.Empty;
+		AbilitiesDatabase.OnAbilityActivateFunc activateFunc = null;
+		AbilitiesDatabase.OnAbilityExecuteFunc execFunc = null;
+		Singleton<AbilitiesDatabase>.Instance.GetAbilityInfoByName(abilityName, out animName, out activateFunc, out execFunc);
+		if (execFunc != null)
+		{
+			Character executor = null;
+			if (playerId >= 0)
+			{
+				executor = WeakGlobalMonoBehavior<InGameImpl>.Instance.GetHero(playerId);
+			}
+			execFunc(executor);
+		}
+		AbilitySchema schema = Singleton<AbilitiesDatabase>.Instance.GetSchema(abilityName);
+		if (schema == null || !(schema.soundTheme != null))
+		{
+			return;
+		}
+		UdamanSoundThemePlayer soundPlayer = WeakGlobalMonoBehavior<InGameImpl>.Instance.hero.controller.SoundPlayer;
+		if (soundPlayer != null)
+		{
+			if (schema.SoundEvent != null)
+			{
+				soundPlayer.PlaySoundEvent(schema.SoundEvent, schema.soundTheme);
+			}
+			else
+			{
+				soundPlayer.PlaySoundEvent("Spawn", schema.soundTheme);
+			}
 		}
 	}
 
 	private void OnGraveHandsAttack(string abilityID)
 	{
-		List<Character> enemiesAhead = GetEnemiesAhead(float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "attackRange")));
-		float num = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "DOTDuration"));
-		float damage = Singleton<AbilitiesDatabase>.instance.Extrapolate<float>(abilityID, "infiniteUpgradeInitialDamage", "InitalDamage");
-		float damagePerTick = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "DOTDamage"));
-		float tickFrequency = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "DOTFrequency"));
-		float fadeInTime = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "ColorEffectFadeIn"));
-		float fadeOutTime = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "ColorEffectFadeOut"));
-		float holdTime = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "ColorEffectHoldColor"));
-		foreach (Character item in enemiesAhead)
-		{
-			item.RecievedAttack(EAttackType.Blunt, damage);
-			item.SetDamageOverTime(damagePerTick, tickFrequency, num);
-			if (!item.isBoss)
-			{
-				item.controller.StopWalking();
-				item.controller.stunnedTimer = num;
-			}
-			item.MaterialColorFlicker(Color.yellow, fadeInTime, holdTime, fadeOutTime, num);
-		}
 	}
 
 	private void OnNightOfTheDeadAttack(string abilityID)
 	{
-		float allAlliesInvincibleTimer = Singleton<AbilitiesDatabase>.instance.Extrapolate<float>(abilityID, "infiniteUpgradeDuration", "Duration");
-		WeakGlobalSceneBehavior<InGameImpl>.instance.allAlliesInvincibleTimer = allAlliesInvincibleTimer;
-		base.controller.SpawnEffectAtJoint(Resources.Load("FX/NightOfDead") as GameObject, "impact_target", true);
 	}
 
 	private void OnReviveAttack(string abilityID)
 	{
 		base.health = base.maxHealth;
-		WeakGlobalSceneBehavior<InGameImpl>.instance.gate.Revive();
+		if (WeakGlobalMonoBehavior<InGameImpl>.Instance.GetGate(base.ownerId) != null)
+		{
+			WeakGlobalMonoBehavior<InGameImpl>.Instance.GetGate(base.ownerId).Revive();
+		}
 		base.controller.startedDieAnim = false;
-		List<Character> allEnemies = WeakGlobalInstance<CharactersManager>.instance.allEnemies;
-		foreach (Character item in allEnemies)
+		List<Character> playerCharacters = WeakGlobalInstance<CharactersManager>.Instance.GetPlayerCharacters(1 - base.ownerId);
+		foreach (Character item in playerCharacters)
 		{
-			if (item.isBoss)
+			if (!(item is Gate) && !(item is Hero))
 			{
-				item.RecievedAttack(EAttackType.Holy, item.maxHealth * 0.5f);
-			}
-			else
-			{
-				item.RecievedAttack(EAttackType.Holy, item.maxHealth);
+				if (item.isBoss)
+				{
+					item.RecievedAttack(EAttackType.Holy, Mathf.Floor(item.health * 0.5f), WeakGlobalMonoBehavior<InGameImpl>.Instance.hero);
+				}
+				else
+				{
+					item.RecievedAttack(EAttackType.Holy, item.maxHealth, WeakGlobalMonoBehavior<InGameImpl>.Instance.hero);
+				}
 			}
 		}
 	}
 
-	private void OnLethargyAttack(string abilityID)
+	public void SwitchToCursedWeapon(GameObject weaponPrefab)
 	{
-		List<Character> allEnemies = WeakGlobalInstance<CharactersManager>.instance.allEnemies;
-		float num = Singleton<AbilitiesDatabase>.instance.Extrapolate<float>(abilityID, "infiniteUpgradeDuration", "Duration");
-		float speedMod = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "SpeedSnareMultiplier"));
-		float fadeInTime = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "ColorEffectFadeIn"));
-		float fadeOutTime = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "ColorEffectFadeOut"));
-		GameObject prefab = Resources.Load(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "fx")) as GameObject;
-		foreach (Character item in allEnemies)
+		if (weaponPrefab != null)
 		{
-			UnityEngine.Object.Destroy(item.controller.InstantiateObjectOnJoint(prefab, "head_effect"), num);
-			item.SetSpeedModifier(speedMod, num);
-			Color color = new Color((float)int.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "Red")) / 255f, (float)int.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "Green")) / 255f, (float)int.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "Blue")) / 255f);
-			item.MaterialColorFadeInOut(color, fadeInTime, num, fadeOutTime);
+			WeakGlobalMonoBehavior<InGameImpl>.Instance.RunAfterDelay(RestoreMeleeWeapon, 15f);
+			DestroyMeleeWeaponPrefabs();
+			base.meleeWeaponPrefab = weaponPrefab;
 		}
-	}
-
-	private void OnDivineInterventionAttack(string abilityID)
-	{
-		float num = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "summonAllyChance"));
-		if (UnityEngine.Random.Range(0f, 1f) <= num)
-		{
-			int randomHelperToSpawn = WeakGlobalInstance<Smithy>.instance.GetRandomHelperToSpawn();
-			if (randomHelperToSpawn < 0)
-			{
-				SwitchToCursedWeapon(abilityID);
-				return;
-			}
-			BoxCollider helperSpawnArea = WeakGlobalInstance<Smithy>.instance.helperSpawnArea;
-			float num2 = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "spawnDistance"));
-			float num3 = ((!mIsLeftToRightGameplay) ? num2 : (0f - num2));
-			Vector3 spawnPos = new Vector3(base.controlledObject.transform.position.x, base.controlledObject.transform.position.y + num2, base.controlledObject.transform.position.z + num3);
-			for (int i = 0; i < 2; i++)
-			{
-				UnityEngine.Object.Instantiate(Resources.Load(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "divineFX")), spawnPos, Quaternion.identity);
-				Color color = new Color((float)int.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "allyColorRed")) / 255f, (float)int.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "allyColorGreen")) / 255f, (float)int.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "allyColorBlue")) / 255f);
-				Helper helper = WeakGlobalInstance<Smithy>.instance.SpawnForFree(randomHelperToSpawn, helperSpawnArea.size.x, spawnPos);
-				helper.MaterialColorSetPermanentColor(color);
-			}
-		}
-		else if (!Singleton<Profile>.instance.inBonusWave)
-		{
-			SwitchToCursedWeapon(abilityID);
-		}
-	}
-
-	private void SwitchToCursedWeapon(string abilityID)
-	{
-		WeakGlobalSceneBehavior<InGameImpl>.instance.RunAfterDelay(RestoreMeleeWeapon, 15f);
-		DestroyMeleeWeaponPrefabs();
-		base.meleeWeaponPrefab = Resources.Load(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "cursedWeaponPrefab")) as GameObject;
-	}
-
-	private void OnSummonTornadoAttack(string abilityID)
-	{
-		float num = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "spawnOffset"));
-		Vector3 vector = base.position;
-		vector.z += num;
-		vector.y = WeakGlobalInstance<RailManager>.instance.GetY(vector.z);
-		UnityEngine.Object.Instantiate(Resources.Load(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "fx")) as GameObject, vector, Quaternion.identity);
 	}
 
 	private void OnGroundShockAttack(string abilityID)
 	{
-		float num = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "spawnOffset"));
-		Vector3 vector = base.position;
-		vector.z += num;
-		vector.y = WeakGlobalInstance<RailManager>.instance.GetY(vector.z);
-		UnityEngine.Object.Instantiate(Resources.Load(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "fx")) as GameObject, vector, Quaternion.identity);
+		float num = float.Parse(Singleton<AbilitiesDatabase>.Instance.GetAttribute(abilityID, "spawnOffset"));
+		Vector3 value = base.position;
+		value.z += num;
+		value.y = WeakGlobalInstance<RailManager>.Instance.GetY(value.z);
+		SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource(string.Format("Assets/Game/Resources/{0}.prefab", Singleton<AbilitiesDatabase>.Instance.GetAttribute(abilityID, "fx")), 1);
+		if (cachedResource != null)
+		{
+			GameObjectPool.DefaultObjectPool.Acquire(cachedResource.Resource as GameObject, value, Quaternion.identity);
+		}
 	}
 
-	private void OnGiantWaveAttack(string abilityID)
+	private void OnReviveDone()
 	{
-		Vector3 vector = base.position;
-		float num = float.Parse(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "spawnDistance"));
-		float num2 = ((!mIsLeftToRightGameplay) ? num : (0f - num));
-		vector.z = WeakGlobalInstance<Smithy>.instance.helperSpawnArea.transform.position.z + num2;
-		UnityEngine.Object.Instantiate(Resources.Load(Singleton<AbilitiesDatabase>.instance.GetAttribute(abilityID, "fx")) as GameObject, vector, Quaternion.identity);
+		ResetInvulnToDefault();
+		OnSpecialAttackDone();
 	}
 
 	private void OnSpecialAttackDone()
@@ -540,81 +1094,77 @@ public class Hero : Character
 	private void RestoreMeleeWeapon()
 	{
 		DestroyMeleeWeaponPrefabs();
-		if (mCachedMeleeWeaponPrefab.Count == 0)
-		{
-			SDFTreeNode root = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Weapons/" + Singleton<Profile>.instance.swordID);
-			string activeCharm = WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm;
-			for (int i = 0; i < normalMeleePrefabID.Length; i++)
-			{
-				string text = Singleton<CharmsDatabase>.instance.GetAttribute(activeCharm, charmMeleePrefabID[i]);
-				if (text == string.Empty)
-				{
-					text = InfiniteUpgrades.SnapToHighest<string>(root, normalMeleePrefabID[i], Singleton<Profile>.instance.swordLevel);
-				}
-				if (text != string.Empty)
-				{
-					mCachedMeleeWeaponPrefab.Add(text);
-				}
-			}
-		}
+		WeaponSchema meleeWeapon = mainData.MeleeWeapon;
 		List<GameObject> list = new List<GameObject>();
-		foreach (string item in mCachedMeleeWeaponPrefab)
+		int level = Singleton<Profile>.Instance.swordLevel;
+		if (base.ownerId != 0)
 		{
-			list.Add(Resources.Load(item) as GameObject);
+			level = Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.meleeLevel;
+		}
+		list.Add(meleeWeapon.GetLevel(level).prefab);
+		if (meleeWeapon.isDualWield)
+		{
+			list.Add(meleeWeapon.GetLevel(level).prefab);
 		}
 		base.meleeWeaponPrefabAsList = list;
 	}
 
-	private void onMoveLeft()
+	private void RestoreRangedWeapon()
 	{
-		if (WeakGlobalInstance<TutorialHookup>.instance != null)
+		Object.Destroy(base.rangedWeaponPrefab);
+		WeaponSchema rangedWeapon = mainData.RangedWeapon;
+		int bowLevel = Singleton<Profile>.Instance.bowLevel;
+		if (base.ownerId != 0)
 		{
-			WeakGlobalInstance<TutorialHookup>.instance.playerPressedLeft = true;
+			bowLevel = Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.bowLevel;
 		}
-		if (!mPerformingSpecialAttack)
+		base.rangedWeaponPrefab = rangedWeapon.GetLevel(bowLevel).prefab;
+	}
+
+	public void onMoveLeft()
+	{
+		if (base.health > 0f && !mPerformingSpecialAttack)
 		{
-			base.controller.StartWalkLeft();
-			SetRangeAttackMode(false);
+			if (base.controller.walkDirection == FacingType.Right)
+			{
+				base.controller.StopWalking();
+			}
+			else
+			{
+				base.controller.StartWalkLeft();
+			}
+			if (base.controller.animPlayer.baseAnim == "runback")
+			{
+				SetRangeAttackMode(false);
+			}
 		}
 	}
 
-	private void onMoveRight()
+	public void onMoveRight()
 	{
-		if (WeakGlobalInstance<TutorialHookup>.instance != null)
+		if (base.health > 0f && !mPerformingSpecialAttack)
 		{
-			WeakGlobalInstance<TutorialHookup>.instance.playerPressedRight = true;
-		}
-		if (!mPerformingSpecialAttack)
-		{
-			base.controller.StartWalkRight();
-			SetRangeAttackMode(false);
+			if (base.controller.walkDirection == FacingType.Left)
+			{
+				base.controller.StopWalking();
+			}
+			else
+			{
+				base.controller.StartWalkRight();
+			}
+			if (base.controller.animPlayer.baseAnim == "runback")
+			{
+				SetRangeAttackMode(false);
+			}
 		}
 	}
 
-	private void onDontMove()
+	public void onDontMove()
 	{
-		if (base.controller.isMoving)
+		if (base.health > 0f && base.controller.isMoving)
 		{
 			base.controller.StopWalking();
 		}
-	}
-
-	private string GetHeroPrefab(SDFTreeNode data)
-	{
-		if (Singleton<Profile>.instance.inBonusWave)
-		{
-			return "Characters/PFHeroGhost";
-		}
-		string text = data["prefab"];
-		if (WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm != string.Empty)
-		{
-			string attribute = Singleton<CharmsDatabase>.instance.GetAttribute(WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm, "heroPrefabSwap", text);
-			if (attribute != string.Empty)
-			{
-				return attribute;
-			}
-		}
-		return text;
 	}
 
 	private GameObject FindChildWithTag(GameObject go, string tagName)
@@ -639,54 +1189,81 @@ public class Hero : Character
 		return null;
 	}
 
-	private void UpdateHealthThreshold()
-	{
-		if (base.health <= GetHealthThreshold(2, base.maxHealth))
-		{
-			mHealthBarToShow = "Sprites/HUD/life_bar_red";
-		}
-		else if (base.health <= GetHealthThreshold(1, base.maxHealth))
-		{
-			mHealthBarToShow = "Sprites/HUD/life_bar_yellow";
-		}
-		else
-		{
-			mHealthBarToShow = "Sprites/HUD/life_bar_green";
-		}
-	}
-
-	private void NotifyTutorials_InRangeOfAttack(bool val)
-	{
-		if (WeakGlobalInstance<TutorialHookup>.instance != null)
-		{
-			WeakGlobalInstance<TutorialHookup>.instance.enemyIsInRangeOFAttack = val;
-		}
-	}
-
-	private void SetDefaultFacing()
-	{
-		base.controller.facing = (mIsLeftToRightGameplay ? FacingType.Right : FacingType.Left);
-	}
-
-	private List<Character> GetEnemiesAhead(float range)
+	public List<Character> GetEnemiesAhead(float range)
 	{
 		if (mIsLeftToRightGameplay)
 		{
-			return WeakGlobalInstance<CharactersManager>.instance.GetCharactersInRange(base.controller.position.z, base.controller.position.z + range, true);
+			return WeakGlobalInstance<CharactersManager>.Instance.GetCharactersInRange(base.controller.position.z, base.controller.position.z + range, 1 - base.ownerId);
 		}
-		return WeakGlobalInstance<CharactersManager>.instance.GetCharactersInRange(base.controller.position.z - range, base.controller.position.z, true);
+		return WeakGlobalInstance<CharactersManager>.Instance.GetCharactersInRange(base.controller.position.z - range, base.controller.position.z, 1 - base.ownerId);
+	}
+
+	public List<Character> GetEnemiesAheadMaxCount(float range, int maxCount)
+	{
+		if (mIsLeftToRightGameplay)
+		{
+			return WeakGlobalInstance<CharactersManager>.Instance.GetCharactersInRangeMaxCount(base.controller.position.z, base.controller.position.z + range, 1 - base.ownerId, maxCount);
+		}
+		return WeakGlobalInstance<CharactersManager>.Instance.GetCharactersInRangeMaxCount(base.controller.position.z - range, base.controller.position.z, 1 - base.ownerId, maxCount);
+	}
+
+	public List<Character> GetEnemiesAround(float range)
+	{
+		return WeakGlobalInstance<CharactersManager>.Instance.GetCharactersInRange(base.controller.position.z - range, base.controller.position.z + range, 1 - base.ownerId);
 	}
 
 	private bool CheckAbilitySelected(string abilityID)
 	{
-		List<string> selectedAbilities = Singleton<Profile>.instance.GetSelectedAbilities();
-		foreach (string item in selectedAbilities)
+		string[] array = ((base.ownerId != 0) ? Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.abilityIdList.ToArray() : Singleton<Profile>.Instance.GetSelectedAbilities().ToArray());
+		string[] array2 = array;
+		foreach (string text in array2)
 		{
-			if (abilityID == item)
+			if (abilityID == text)
 			{
 				return true;
 			}
 		}
 		return false;
+	}
+
+	protected override GameObject GetMeleeUpgradeEffect()
+	{
+		return mMPMeleeWeaponUpgradePrefab;
+	}
+
+	protected override GameObject GetRangedUpgradeEffect()
+	{
+		return mMPRangedWeaponUpgradePrefab;
+	}
+
+	public override void PerformKnockback(Character target, int knockbackPower, bool force, Vector3 positionAdjust)
+	{
+		if (base.LeftToRight && !target.isPlayer && !target.isBase && !target.isBoss && WeakGlobalMonoBehavior<InGameImpl>.Exists)
+		{
+			Pit pit = WeakGlobalMonoBehavior<InGameImpl>.Instance.Pit;
+			if (pit != null && pit.TryTaking(target))
+			{
+				BoxCollider area = pit.Area;
+				positionAdjust.x = area.transform.position.x - target.position.x;
+				float value = target.transform.position.z + (positionAdjust.z + 1f) * (0f - (float)target.controller.facing);
+				value = Mathf.Clamp(value, pit.Range.left, pit.Range.right);
+				if (target.LeftToRight)
+				{
+					positionAdjust.z = Mathf.Min(value - target.transform.position.z, 0f);
+				}
+				else
+				{
+					positionAdjust.z = Mathf.Max(value - target.transform.position.z, 0f);
+				}
+				positionAdjust.y = Mathf.Max(positionAdjust.y, 4f);
+				if (target.TryKnockback(knockbackPower, force, positionAdjust))
+				{
+					pit.CatchTarget(target);
+				}
+				return;
+			}
+		}
+		positionAdjust.z = (positionAdjust.z + 1f) * (0f - (float)target.controller.facing);
+		target.TryKnockback(knockbackPower, force, positionAdjust);
 	}
 }

@@ -4,7 +4,7 @@ public class Singleton<T> where T : class, new()
 {
 	private static T mUniqueInstance;
 
-	public static T instance
+	public static T Instance
 	{
 		get
 		{
@@ -16,16 +16,19 @@ public class Singleton<T> where T : class, new()
 		}
 	}
 
+	public static bool Exists
+	{
+		get
+		{
+			return mUniqueInstance != null;
+		}
+	}
+
 	public Singleton()
 	{
 		if (mUniqueInstance != null)
 		{
-			throw new InvalidOperationException("Cannot manually instantiate a Singleton<> class.");
+			throw new InvalidOperationException(string.Concat("Singleton [", typeof(T), "] cannot be manually instantiated."));
 		}
-	}
-
-	public static bool IsAlive()
-	{
-		return mUniqueInstance != null;
 	}
 }

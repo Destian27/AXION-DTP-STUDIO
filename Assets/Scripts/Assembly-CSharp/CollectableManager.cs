@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class CollectableManager : WeakGlobalInstance<CollectableManager>
 {
-	private const float kHeroCollectRange = 32f;
+	public const float kHeroCollectRange = 0.32f;
 
 	public static WaveSpoils currentWaveSpoils = new WaveSpoils();
 
@@ -26,6 +26,30 @@ public class CollectableManager : WeakGlobalInstance<CollectableManager>
 
 	public float magnetMaxSpeed { get; private set; }
 
+	public float LeftEdge
+	{
+		get
+		{
+			return mLeftEdge;
+		}
+		set
+		{
+			mLeftEdge = value;
+		}
+	}
+
+	public float RightEdge
+	{
+		get
+		{
+			return mRightEdge;
+		}
+		set
+		{
+			mRightEdge = value;
+		}
+	}
+
 	public CollectableManager(float leftEdge, float rightEdge, float centerX)
 	{
 		SetUniqueInstance(this);
@@ -35,11 +59,12 @@ public class CollectableManager : WeakGlobalInstance<CollectableManager>
 		mCenterX = centerX;
 		mTotalDropWeight = 0f;
 		currentWaveSpoils = new WaveSpoils();
-		if (WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm == "wealth" || WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm.Contains("+wealth"))
+		if (WeakGlobalMonoBehavior<InGameImpl>.Instance.HasWealthCharm())
 		{
-			magnetMaxDist = float.Parse(Singleton<CharmsDatabase>.instance.GetAttribute(WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm, "magnetRange"));
-			magnetMinSpeed = float.Parse(Singleton<CharmsDatabase>.instance.GetAttribute(WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm, "magnetMinPullSpeed"));
-			magnetMaxSpeed = float.Parse(Singleton<CharmsDatabase>.instance.GetAttribute(WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm, "magnetMaxPullSpeed"));
+			CharmSchema charmSchema = Singleton<CharmsDatabase>.Instance[WeakGlobalMonoBehavior<InGameImpl>.Instance.activeCharm];
+			magnetMaxDist = charmSchema.magnetRange;
+			magnetMinSpeed = charmSchema.magnetMinPullSpeed;
+			magnetMaxSpeed = charmSchema.magnetMaxPullSpeed;
 		}
 		else
 		{
@@ -47,88 +72,109 @@ public class CollectableManager : WeakGlobalInstance<CollectableManager>
 			magnetMinSpeed = 0f;
 			magnetMaxSpeed = 0f;
 		}
-		SDFTreeNode sDFTreeNode = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/resources");
-		if (sDFTreeNode == null)
+		TextDBSchema[] array = ((!Singleton<Profile>.Instance.MultiplayerData.IsMultiplayerGameSessionActive()) ? DataBundleUtils.InitializeRecords<TextDBSchema>("resources") : DataBundleUtils.InitializeRecords<TextDBSchema>("resources_MP"));
+		if (array == null)
 		{
 			return;
 		}
-		mResourceTemplates = new ResourceTemplate[8];
-		for (int i = 0; i < 8; i++)
+		string text = ((!string.IsNullOrEmpty(Singleton<Profile>.Instance.playModeSubSection)) ? Singleton<Profile>.Instance.playModeSubSection : "classic");
+		mResourceTemplates = new ResourceTemplate[9];
+		string[] names = Enum.GetNames(typeof(ECollectableType));
+		Array values = Enum.GetValues(typeof(ECollectableType));
+		for (int i = 0; i < names.Length; i++)
 		{
-			ECollectableType eCollectableType = (ECollectableType)i;
-			SDFTreeNode sDFTreeNode2 = sDFTreeNode.to(eCollectableType.ToString());
-			ResourceTemplate resourceTemplate = new ResourceTemplate();
-			if (sDFTreeNode2 != null)
+			string text2 = names[i];
+			int @int = array.GetInt(TextDBSchema.ChildKey(text2, "amount"));
+			if (@int < 1)
 			{
-				resourceTemplate.prefab = Resources.Load(sDFTreeNode2.to("prefab")[Singleton<PlayModesManager>.instance.selectedMode]) as GameObject;
-				resourceTemplate.amount = int.Parse(sDFTreeNode2["amount"]);
-				resourceTemplate.lifetime = float.Parse(sDFTreeNode2["lifetime"]);
-				resourceTemplate.weight = float.Parse(sDFTreeNode2["weight"]);
-				resourceTemplate.contentsTotalWeight = 0f;
-				resourceTemplate.contents = null;
-				resourceTemplate.postDeathContentsTotalWeight = 0f;
-				resourceTemplate.postDeathContents = null;
-				if (i >= 3 && i <= 6)
+				continue;
+			}
+			ECollectableType eCollectableType = (ECollectableType)(int)values.GetValue(i);
+			ResourceTemplate resourceTemplate = new ResourceTemplate
+			{
+				amount = @int
+			};
+			SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource(string.Format("Assets/Game/Resources/{0}.prefab", array.GetString(TextDBSchema.ChildKey(text2, "prefab", text))), 1);
+			if (cachedResource != null)
+			{
+				resourceTemplate.prefab = cachedResource.Resource as GameObject;
+			}
+			resourceTemplate.lifetime = array.GetFloat(TextDBSchema.ChildKey(text2, "lifetime"));
+			resourceTemplate.weight = array.GetFloat(TextDBSchema.ChildKey(text2, "weight"));
+			resourceTemplate.contentsTotalWeight = 0f;
+			resourceTemplate.contents = null;
+			resourceTemplate.postDeathContentsTotalWeight = 0f;
+			resourceTemplate.postDeathContents = null;
+			if (eCollectableType >= ECollectableType.presentA && eCollectableType <= ECollectableType.presentD)
+			{
+				string text3 = TextDBSchema.ChildKey(text2, "normal", text);
+				string text4 = TextDBSchema.ChildKey(text2, "death", text);
+				TextDBSchema[] array2 = array;
+				foreach (TextDBSchema textDBSchema in array2)
 				{
-					SDFTreeNode sDFTreeNode3 = sDFTreeNode2.to("normal");
-					if (sDFTreeNode3 != null)
+					if (textDBSchema.key.StartsWith(text3))
 					{
-						sDFTreeNode3 = sDFTreeNode3.to(Singleton<PlayModesManager>.instance.selectedMode);
-						if (sDFTreeNode3 != null)
+						string text5 = textDBSchema.key.Substring(text3.Length + 1);
+						if (IsValidPresentContent(text5) && !AlreadyHasPermenantItem(text5) && !ItemRestrictedByLevel(text5))
 						{
-							resourceTemplate.contents = new Dictionary<string, float>();
-							foreach (KeyValuePair<string, string> attribute in sDFTreeNode3.attributes)
+							if (resourceTemplate.contents == null)
 							{
-								if (IsValidPresentContent(attribute.Key) && !AlreadyHasPermenantItem(attribute.Key) && !ItemRestrictedByLevel(attribute.Key))
-								{
-									float num = float.Parse(attribute.Value);
-									resourceTemplate.contents.Add(attribute.Key, num);
-									resourceTemplate.contentsTotalWeight += num;
-								}
+								resourceTemplate.contents = new Dictionary<string, float>();
 							}
+							float num = float.Parse(textDBSchema.value);
+							resourceTemplate.contents.Add(text5, num);
+							resourceTemplate.contentsTotalWeight += num;
 						}
 					}
-					sDFTreeNode3 = sDFTreeNode2.to("death");
-					if (sDFTreeNode3 != null)
+					else
 					{
-						sDFTreeNode3 = sDFTreeNode3.to(Singleton<PlayModesManager>.instance.selectedMode);
-						if (sDFTreeNode3 != null)
+						if (!textDBSchema.key.StartsWith(text4))
 						{
-							resourceTemplate.postDeathContents = new Dictionary<string, float>();
-							foreach (KeyValuePair<string, string> attribute2 in sDFTreeNode3.attributes)
+							continue;
+						}
+						string text6 = textDBSchema.key.Substring(text4.Length + 1);
+						if (IsValidPresentContent(text6) && !AlreadyHasPermenantItem(text6) && !ItemRestrictedByLevel(text6))
+						{
+							if (resourceTemplate.postDeathContents == null)
 							{
-								if (IsValidPresentContent(attribute2.Key) && !AlreadyHasPermenantItem(attribute2.Key) && !ItemRestrictedByLevel(attribute2.Key))
-								{
-									float num2 = float.Parse(attribute2.Value);
-									resourceTemplate.postDeathContents.Add(attribute2.Key, num2);
-									resourceTemplate.postDeathContentsTotalWeight += num2;
-								}
+								resourceTemplate.postDeathContents = new Dictionary<string, float>();
 							}
+							float num2 = float.Parse(textDBSchema.value);
+							resourceTemplate.postDeathContents.Add(text6, num2);
+							resourceTemplate.postDeathContentsTotalWeight += num2;
 						}
 					}
 				}
 			}
-			mResourceTemplates[i] = resourceTemplate;
+			mResourceTemplates[(int)eCollectableType] = resourceTemplate;
 			mTotalDropWeight += resourceTemplate.weight;
 		}
 	}
 
 	public void Update()
 	{
-		for (int num = mCollectables.Count - 1; num >= 0; num--)
+		int num = 0;
+		while (num < mCollectables.Count)
 		{
-			if (mCollectables[num].isReadyToBeCollected && IsInRange(WeakGlobalSceneBehavior<InGameImpl>.instance.hero, mCollectables[num]))
+			if (mCollectables[num].isReadyToBeCollected && IsInRange(WeakGlobalMonoBehavior<InGameImpl>.Instance.hero, mCollectables[num]))
 			{
 				mCollectables[num].OnCollected();
 			}
 			else if (mCollectables[num].isReadyToDie)
 			{
 				mCollectables[num].Destroy();
-				mCollectables.RemoveAt(num);
 			}
 			else
 			{
 				mCollectables[num].Update();
+			}
+			if (mCollectables[num].isDestroyed)
+			{
+				mCollectables.RemoveAt(num);
+			}
+			else
+			{
+				num++;
 			}
 		}
 	}
@@ -144,11 +190,11 @@ public class CollectableManager : WeakGlobalInstance<CollectableManager>
 		for (int i = 0; i < num; i++)
 		{
 			float num2 = UnityEngine.Random.Range(0f, mTotalDropWeight - float.Epsilon);
-			for (int j = 0; j < 8; j++)
+			for (int j = 0; j < 9; j++)
 			{
 				ECollectableType eCollectableType = (ECollectableType)j;
 				num2 -= mResourceTemplates[j].weight;
-				if (num2 < 0f && mResourceTemplates[j].weight > 0f)
+				if (mResourceTemplates[j].prefab != null && num2 < 0f && mResourceTemplates[j].weight > 0f)
 				{
 					if (eCollectableType >= ECollectableType.presentA && eCollectableType <= ECollectableType.presentD)
 					{
@@ -162,7 +208,10 @@ public class CollectableManager : WeakGlobalInstance<CollectableManager>
 		}
 		foreach (ECollectableType item in list)
 		{
-			mCollectables.Add(new Collectable(item, mResourceTemplates[(int)item], position, FindNewCollectableFinalPosition(position)));
+			if (mResourceTemplates[(int)item].prefab != null)
+			{
+				mCollectables.Add(new Collectable(item, mResourceTemplates[(int)item], position, FindNewCollectableFinalPosition(position)));
+			}
 		}
 	}
 
@@ -199,15 +248,46 @@ public class CollectableManager : WeakGlobalInstance<CollectableManager>
 				num = UnityEngine.Random.Range(0f, mResourceTemplates[(int)present.type].contentsTotalWeight - float.Epsilon);
 				dictionary = mResourceTemplates[(int)present.type].contents;
 			}
-			foreach (KeyValuePair<string, float> item in dictionary)
+			if (dictionary != null)
 			{
-				num -= item.Value;
-				if (num < 0f)
+				try
 				{
-					present.contents = item.Key;
-					RemovePermenantItemFromFuturePresents(item.Key);
-					break;
+					foreach (KeyValuePair<string, float> item in dictionary)
+					{
+						num -= item.Value;
+						if (num < 0f)
+						{
+							present.contents = item.Key;
+							RemovePermenantItemFromFuturePresents(item.Key);
+							break;
+						}
+					}
 				}
+				catch (Exception)
+				{
+				}
+			}
+			Singleton<PlayStatistics>.Instance.data.AddLoot(present.contents, 1, present.type);
+			int valueInCoins = CashIn.GetValueInCoins(present.contents, 1);
+			Singleton<PlayStatistics>.Instance.data.totalLootDroppedValue += valueInCoins;
+			switch (CashIn.GetType(present.contents))
+			{
+			case CashIn.ItemType.Coins:
+				Singleton<PlayStatistics>.Instance.data.droppedCoins++;
+				break;
+			case CashIn.ItemType.Gems:
+				Singleton<PlayStatistics>.Instance.data.droppedGems++;
+				break;
+			case CashIn.ItemType.Souls:
+				Singleton<PlayStatistics>.Instance.data.droppedSouls++;
+				break;
+			case CashIn.ItemType.Helper:
+			case CashIn.ItemType.Ability:
+				Singleton<PlayStatistics>.Instance.data.droppedUnlockables++;
+				break;
+			default:
+				Singleton<PlayStatistics>.Instance.data.droppedOtherValue += valueInCoins;
+				break;
 			}
 		}
 	}
@@ -217,7 +297,7 @@ public class CollectableManager : WeakGlobalInstance<CollectableManager>
 		switch (type)
 		{
 		case ECollectableType.coin:
-			if (Singleton<Profile>.instance.earnsDoubleCoins)
+			if (Singleton<Profile>.Instance.GetUpgradeLevel("CoinDouble") > 0)
 			{
 				currentWaveSpoils.coins += amount * 2;
 			}
@@ -226,11 +306,23 @@ public class CollectableManager : WeakGlobalInstance<CollectableManager>
 				currentWaveSpoils.coins += amount;
 			}
 			break;
+		case ECollectableType.soul:
+			if (Singleton<Profile>.Instance.GetUpgradeLevel("SoulsDouble") > 0)
+			{
+				currentWaveSpoils.souls += amount * 2;
+			}
+			else
+			{
+				currentWaveSpoils.souls += amount;
+			}
+			break;
 		case ECollectableType.leadership:
-			WeakGlobalInstance<Smithy>.instance.resources += amount;
+			WeakGlobalInstance<Leadership>.Instance.resources += amount;
+			currentWaveSpoils.leadership += amount;
 			break;
 		case ECollectableType.gem:
 			currentWaveSpoils.gems += amount;
+			Singleton<PlayStatistics>.Instance.data.AddLoot("gems", amount);
 			break;
 		case ECollectableType.pachinkoball:
 			currentWaveSpoils.balls += amount;
@@ -249,67 +341,95 @@ public class CollectableManager : WeakGlobalInstance<CollectableManager>
 		}
 	}
 
-	public void GiveSpecificPresent(string id)
+	public void RecordLootDropped(ECollectableType type, int amount)
 	{
-		CollectedPresent collectedPresent = new CollectedPresent();
-		collectedPresent.type = ECollectableType.presentD;
-		collectedPresent.contents = id;
-		collectedPresent.hasBeenOpened = true;
-		currentWaveSpoils.presents.Add(collectedPresent);
+		switch (type)
+		{
+		case ECollectableType.coin:
+			if (Singleton<Profile>.Instance.GetUpgradeLevel("CoinDouble") > 0)
+			{
+				amount *= 2;
+			}
+			Singleton<PlayStatistics>.Instance.data.totalLootDroppedValue += amount;
+			Singleton<PlayStatistics>.Instance.data.droppedCoins += amount;
+			break;
+		case ECollectableType.soul:
+			if (Singleton<Profile>.Instance.GetUpgradeLevel("SoulsDouble") > 0)
+			{
+				amount *= 2;
+			}
+			Singleton<PlayStatistics>.Instance.data.totalLootDroppedValue += CashIn.GetValueInCoins("souls", amount);
+			Singleton<PlayStatistics>.Instance.data.droppedSouls += amount;
+			break;
+		case ECollectableType.leadership:
+			amount = CashIn.GetValueInCoins("leadership", amount);
+			Singleton<PlayStatistics>.Instance.data.totalLootDroppedValue += amount;
+			Singleton<PlayStatistics>.Instance.data.droppedOtherValue += amount;
+			break;
+		case ECollectableType.gem:
+			Singleton<PlayStatistics>.Instance.data.totalLootDroppedValue += CashIn.GetValueInCoins("gems", amount);
+			Singleton<PlayStatistics>.Instance.data.droppedGems += amount;
+			break;
+		}
+	}
+
+	public void GiveSpecificPresent(string id, int amount)
+	{
+		if (amount > 0)
+		{
+			CollectedPresent collectedPresent = new CollectedPresent();
+			collectedPresent.type = ECollectableType.presentD;
+			collectedPresent.contents = id;
+			collectedPresent.hasBeenOpened = true;
+			collectedPresent.amount = amount;
+			currentWaveSpoils.presents.Add(collectedPresent);
+			Singleton<PlayStatistics>.Instance.data.AddLoot(id, amount);
+		}
 	}
 
 	public void BankAllResources()
 	{
-		Singleton<Profile>.instance.ForceActiveSaveData(false);
-		Singleton<Profile>.instance.coins += currentWaveSpoils.coins;
-		ApplicationUtilities.GWalletBalance(currentWaveSpoils.gems, "Mission " + Singleton<Profile>.instance.waveToBeat + " Complete", "CREDIT_IN_GAME_AWARD");
-		Singleton<Profile>.instance.pachinkoBalls += currentWaveSpoils.balls;
-		Singleton<PlayStatistics>.instance.stats.lastWaveCoinsCollected += currentWaveSpoils.coins;
+		Singleton<Profile>.Instance.ForceActiveSaveData(false);
+		Singleton<Profile>.Instance.AddCoins(currentWaveSpoils.coins, "Collectables");
+		Singleton<Profile>.Instance.AddGems(currentWaveSpoils.gems, "Collectables");
+		Singleton<Profile>.Instance.souls += currentWaveSpoils.souls;
+		Singleton<Profile>.Instance.pachinkoBalls += currentWaveSpoils.balls;
 		OpenPresents(false);
 		foreach (CollectedPresent present in currentWaveSpoils.presents)
 		{
-			int val = 1;
-			if (ArrayContainsString(Singleton<PotionsDatabase>.instance.allIDsForActivePlayMode, present.contents))
+			int amount = present.amount;
+			if (CashIn.From(present.contents, amount, "Present"))
 			{
-				val = int.Parse(Singleton<PotionsDatabase>.instance.GetAttribute(present.contents, "storePack"));
-			}
-			else if (ArrayContainsString(Singleton<HelpersDatabase>.instance.allIDs, present.contents))
-			{
-				Singleton<Analytics>.instance.LogEvent("RecievedUnlockableHelper", present.contents);
-			}
-			if (!CashIn.From(present.contents, val, "Random Loot", "CREDIT_IN_GAME_AWARD"))
-			{
-				Debug.LogError("Could not identify present contents " + present.contents);
 			}
 		}
-		Singleton<Profile>.instance.ForceActiveSaveData(true);
+		Singleton<Profile>.Instance.ForceActiveSaveData(true);
 	}
 
 	private bool IsInRange(Hero hero, Collectable obj)
 	{
-		return (hero.position.z > obj.position.z && !obj.wasAtLeftOfHero) || (hero.position.z < obj.position.z && obj.wasAtLeftOfHero) || Mathf.Abs(hero.position.z - obj.position.z) <= 32f;
+		return (hero.position.z > obj.position.z && !obj.wasAtLeftOfHero) || (hero.position.z < obj.position.z && obj.wasAtLeftOfHero) || Mathf.Abs(hero.position.z - obj.position.z) <= 0.32f;
 	}
 
 	public Vector3 FindNewCollectableFinalPosition(Vector3 spawnPosition)
 	{
 		Vector3 zero = Vector3.zero;
-		zero.x = mCenterX + 115f + UnityEngine.Random.Range(-20f, 20f);
-		zero.z = spawnPosition.z + UnityEngine.Random.Range(-25f, 90f);
+		zero.x = mCenterX + 1.15f + UnityEngine.Random.Range(-0.02f, 0.02f);
+		zero.z = spawnPosition.z + UnityEngine.Random.Range(-0.55f, 0.55f);
 		zero.z = Mathf.Clamp(zero.z, mLeftEdge, mRightEdge);
-		zero.y = WeakGlobalInstance<RailManager>.instance.GetY(zero.z) + 16f;
+		zero.y = WeakGlobalInstance<RailManager>.Instance.GetY(zero.z) + 0.26f;
 		return zero;
 	}
 
 	private bool AlreadyHasPermenantItem(string theItemName)
 	{
-		if (Singleton<AbilitiesDatabase>.instance.Contains(theItemName))
+		if (Singleton<AbilitiesDatabase>.Instance.Contains(theItemName))
 		{
-			if (Singleton<Profile>.instance.GetAbilityLevel(theItemName) > 0)
+			if (Singleton<Profile>.Instance.GetAbilityLevel(theItemName) > 0)
 			{
 				return true;
 			}
 		}
-		else if (Singleton<HelpersDatabase>.instance.Contains(theItemName) && Singleton<Profile>.instance.GetHelperLevel(theItemName) > 0)
+		else if (Singleton<HelpersDatabase>.Instance.Contains(theItemName) && Singleton<Profile>.Instance.GetHelperLevel(theItemName) > 0)
 		{
 			return true;
 		}
@@ -319,7 +439,7 @@ public class CollectableManager : WeakGlobalInstance<CollectableManager>
 	private bool ItemRestrictedByLevel(string theItemName)
 	{
 		bool flag = false;
-		string[] allIDs = Singleton<HelpersDatabase>.instance.allIDs;
+		string[] allIDs = Singleton<HelpersDatabase>.Instance.allIDs;
 		foreach (string strA in allIDs)
 		{
 			if (string.Compare(strA, theItemName, true) == 0)
@@ -332,15 +452,11 @@ public class CollectableManager : WeakGlobalInstance<CollectableManager>
 		{
 			return false;
 		}
-		SDFTreeNode sDFTreeNode = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Helpers/" + theItemName);
-		if (sDFTreeNode != null)
+		HelperSchema helperSchema = Singleton<HelpersDatabase>.Instance[theItemName];
+		if (helperSchema != null)
 		{
-			int num = 0;
-			if (sDFTreeNode.hasAttribute("availableAtWave"))
-			{
-				num = int.Parse(sDFTreeNode["availableAtWave"]);
-			}
-			if (Singleton<Profile>.instance.highestUnlockedWave >= num)
+			int availableAtWave = helperSchema.availableAtWave;
+			if (Singleton<Profile>.Instance.highestUnlockedWave >= availableAtWave)
 			{
 				return false;
 			}
@@ -350,7 +466,7 @@ public class CollectableManager : WeakGlobalInstance<CollectableManager>
 
 	private void RemovePermenantItemFromFuturePresents(string theItemName)
 	{
-		if (!ArrayContainsString(Singleton<HelpersDatabase>.instance.allIDs, theItemName) && !ArrayContainsString(Singleton<AbilitiesDatabase>.instance.allIDs, theItemName))
+		if (!ArrayContainsString(Singleton<HelpersDatabase>.Instance.allIDs, theItemName) && !ArrayContainsString(Singleton<AbilitiesDatabase>.Instance.allIDs, theItemName))
 		{
 			return;
 		}
@@ -384,6 +500,6 @@ public class CollectableManager : WeakGlobalInstance<CollectableManager>
 
 	private bool IsValidPresentContent(string itemID)
 	{
-		return SpoilsDisplay.BuildEntry(itemID, 1) != null;
+		return true;
 	}
 }

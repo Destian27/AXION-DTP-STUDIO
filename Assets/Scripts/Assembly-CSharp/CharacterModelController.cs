@@ -2,9 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-[RequireComponent(typeof(TaggedAnimPlayer))]
-[RequireComponent(typeof(AutoPaperdoll))]
-public class CharacterModelController : MonoBehaviour
+public class CharacterModelController : TaggedAnimPlayerController
 {
 	public enum EPostDeathAction
 	{
@@ -14,44 +12,41 @@ public class CharacterModelController : MonoBehaviour
 		stay = 3
 	}
 
-	[Serializable]
-	public class RandomAnimSet
-	{
-		public string name;
+	public delegate void ChargeMoveAction(float oldZPos, float newZPos);
 
-		public AnimationClip[] clips;
-
-		public bool onlyRandomizeOnce;
-
-		[NonSerialized]
-		internal int? mLastClipIndexChosen;
-	}
-
-	private const float kSpeedDefault = 100f;
+	public const float kSpeedDefault = 1f;
 
 	private const float kAimRotationSpeed = 150f;
 
 	private const float kAimResetSpeed = 150f;
 
-	private const float kKnockbackTime = 0.5f;
+	private const float kKnockbackSpeed = 2f;
 
-	private const float kKnockbackSpeed = 200f;
-
-	private const float kKnockbackArcHeight = 32f;
+	private const float kKnockbackArcHeight = 0.62f;
 
 	private const float kSimulatedKnockbackLandTime = 0.25f;
 
+	private const float kJumpTime = 0.75f;
+
+	private const float kJumpSpeed = 3f;
+
+	private const float kJumpArcHeight = 1.25f;
+
+	private const float kSimulatedJumpLandTime = 0f;
+
 	private const float kMaxBackpedalTime = 1.3f;
 
-	private const float kFacingTowardTurnSpeed = 225f;
+	private const float kFacingTowardTurnSpeed = 180f;
 
-	private const float kResetFacingTurnSpeed = 225f;
+	private const float kResetFacingTurnSpeed = 180f;
+
+	private const float kKnockbackGravityAccel = 9.8f;
+
+	public const float kKnockbackDistance = 1f;
 
 	public bool attackActive;
 
-	public float animatedWalkSpeed = 100f;
-
-	public RandomAnimSet[] randomAnimSets = new RandomAnimSet[0];
+	public float animatedWalkSpeed = 1f;
 
 	public GameObject arrowImpactEffect;
 
@@ -65,9 +60,13 @@ public class CharacterModelController : MonoBehaviour
 
 	public bool snapToGround = true;
 
+	private float mMaxBackPedalTime = 1.3f;
+
 	public Action onMeleeAttackDelivery;
 
 	public Action onRangedAttackDelivery;
+
+	public Action<bool> onMeleeAttack;
 
 	private Transform mCachedTransform;
 
@@ -83,11 +82,13 @@ public class CharacterModelController : MonoBehaviour
 
 	private FacingType mWalkDirection;
 
-	private FacingType mFacing = FacingType.Right;
+	private FacingType mFacing;
 
 	private bool mAttackDeliveryTriggered;
 
-	private bool mSnapThisUpdate = true;
+	private int mUpdatesNoSnap = 1;
+
+	private int mUpdatesUntilNextSnap;
 
 	private bool mUseRangedAttackIdle;
 
@@ -97,15 +98,25 @@ public class CharacterModelController : MonoBehaviour
 
 	private bool mPlayingVictoryAnim;
 
+	private bool mFirstUpdate;
+
+	private bool mAttacking;
+
 	private float mStunnedTimer;
 
 	private float mKnockbackTime;
 
-	private TaggedAnimPlayer mAnimPlayer;
+	private float mTotalKnockbackTime;
+
+	private float mKnockbackAcceleration;
+
+	private Vector3 mKnockbackVelocity;
+
+	private float mJumpTime;
 
 	private AutoPaperdoll mAutoPaperdoll;
 
-	private SoundThemePlayer mSoundPlayer;
+	private UdamanSoundThemePlayer mSoundPlayer;
 
 	private GameObject mProjectileInstance;
 
@@ -113,27 +124,69 @@ public class CharacterModelController : MonoBehaviour
 
 	private EPostDeathAction mPostDeathAction;
 
-	private Dictionary<string, RandomAnimSet> mRandomAnimSets = new Dictionary<string, RandomAnimSet>();
-
-	private string mCurrentAnim = "idle";
-
 	private float? mAimAngle;
 
 	private float? mHeadAngle;
+
+	private List<GameObject> mMaterialSwitchIgnoreObjects = new List<GameObject>(1);
+
+	private float mScaleTarget = 1f;
+
+	private float mScaleRate;
+
+	private float mOldScale = 1f;
+
+	private float mScale = 1f;
+
+	private CharacterModelController mAttachedCharacter;
+
+	private Transform mAttachedToXForm;
+
+	public Material materialOverride { get; set; }
+
+	public float MaxBackPedalTime
+	{
+		get
+		{
+			return mMaxBackPedalTime;
+		}
+		set
+		{
+			mMaxBackPedalTime = value;
+		}
+	}
+
+	public Vector3 KnockbackTargetPoint { get; private set; }
+
+	public float KnockbackTime
+	{
+		get
+		{
+			return mKnockbackTime;
+		}
+		private set
+		{
+			mKnockbackTime = value;
+		}
+	}
+
+	public Vector3 KnockbackVelocity
+	{
+		get
+		{
+			return mKnockbackVelocity;
+		}
+		private set
+		{
+			mKnockbackVelocity = value;
+		}
+	}
 
 	public AutoPaperdoll autoPaperdoll
 	{
 		get
 		{
 			return mAutoPaperdoll;
-		}
-	}
-
-	public TaggedAnimPlayer animPlayer
-	{
-		get
-		{
-			return mAnimPlayer;
 		}
 	}
 
@@ -205,7 +258,7 @@ public class CharacterModelController : MonoBehaviour
 		}
 	}
 
-	public float speedModifier
+	public override float speedModifier
 	{
 		get
 		{
@@ -215,10 +268,10 @@ public class CharacterModelController : MonoBehaviour
 		{
 			if (mWalkDirection == FacingType.Unchanged)
 			{
-				mAnimPlayer.baseAnimSpeed = value;
+				base.baseAnimSpeed = value;
 				if (value < mSpeedModifier)
 				{
-					mAnimPlayer.currAnimSpeed = value;
+					base.currAnimSpeed = value;
 				}
 			}
 			if (value >= 0f)
@@ -248,12 +301,11 @@ public class CharacterModelController : MonoBehaviour
 	{
 		set
 		{
-			TaggedAnimPlayer taggedAnimPlayer = mAnimPlayer;
-			taggedAnimPlayer.currAnimChangedCallback = (Action)Delegate.Combine(taggedAnimPlayer.currAnimChangedCallback, value);
+			base.currAnimChangedCallback = (Action)Delegate.Combine(base.currAnimChangedCallback, value);
 		}
 	}
 
-	public GameObject projectilePrefab { get; set; }
+	public string ProjectileType { get; private set; }
 
 	public bool startedDieAnim { get; set; }
 
@@ -277,7 +329,7 @@ public class CharacterModelController : MonoBehaviour
 	{
 		get
 		{
-			return !isInHurtState && (mAnimPlayer.actionAnimState == null || mAnimPlayer.actionAnim == "backpedalturn" || mPlayingVictoryAnim);
+			return !isInHurtState && !isPitThrown && (base.actionAnimState == null || base.actionAnim == "backpedalturn" || mPlayingVictoryAnim);
 		}
 	}
 
@@ -286,6 +338,16 @@ public class CharacterModelController : MonoBehaviour
 		get
 		{
 			return mKnockbackTime > 0f;
+		}
+	}
+
+	public bool isPitThrown { get; set; }
+
+	public bool isInJump
+	{
+		get
+		{
+			return mJumpTime > 0f;
 		}
 	}
 
@@ -301,11 +363,11 @@ public class CharacterModelController : MonoBehaviour
 	{
 		get
 		{
-			if (mAnimPlayer.actionAnimState == null)
+			if (base.actionAnimState == null)
 			{
-				return mAnimPlayer.baseAnim;
+				return base.baseAnim;
 			}
-			return mCurrentAnim;
+			return base.currAnim;
 		}
 	}
 
@@ -313,7 +375,7 @@ public class CharacterModelController : MonoBehaviour
 	{
 		get
 		{
-			return !mAnimPlayer.IsDone();
+			return !IsDone();
 		}
 	}
 
@@ -321,7 +383,7 @@ public class CharacterModelController : MonoBehaviour
 	{
 		get
 		{
-			return mAnimPlayer.currAnimState.length;
+			return base.currAnimState.length;
 		}
 	}
 
@@ -339,43 +401,152 @@ public class CharacterModelController : MonoBehaviour
 		}
 	}
 
+	public UdamanSoundThemePlayer SoundPlayer
+	{
+		get
+		{
+			return mSoundPlayer;
+		}
+	}
+
+	public ChargeMoveAction onChargeMove { get; set; }
+
+	public int updatesNoSnap
+	{
+		get
+		{
+			return mUpdatesNoSnap;
+		}
+		set
+		{
+			mUpdatesNoSnap = value;
+		}
+	}
+
+	public FacingType walkDirection
+	{
+		get
+		{
+			return mWalkDirection;
+		}
+	}
+
+	public bool isCharging { get; set; }
+
+	public CharacterModelController target { get; set; }
+
+	public bool isAttacking
+	{
+		get
+		{
+			return mAttacking;
+		}
+		private set
+		{
+			mAttacking = value;
+		}
+	}
+
 	public void Awake()
 	{
-		mSpeed = 100f;
+		startedDieAnim = false;
+		xPos = 0f;
+		mFirstUpdate = true;
+		mConstraintLeft = 0f;
+		mConstraintRight = 0f;
+		mSpeedModifier = 1f;
+		mImpactPauseTime = 0f;
+		mWalkDirection = FacingType.Unchanged;
+		mAttackDeliveryTriggered = false;
+		mUpdatesNoSnap = 1;
+		mUpdatesUntilNextSnap = 0;
+		mUseRangedAttackIdle = false;
+		mUseCowerIdle = false;
+		mPlayingHurtAnim = false;
+		mPlayingVictoryAnim = false;
+		mStunnedTimer = 0f;
+		mKnockbackTime = 0f;
+		mProjectileInstance = null;
+		mOnAttackDelivery = null;
+		mPostDeathAction = EPostDeathAction.vanish;
+		mAimAngle = null;
+		mHeadAngle = null;
+		mScaleTarget = 1f;
+		mScaleRate = 0f;
+		mOldScale = 1f;
+		mScale = 1f;
+		base.transform.localScale = Vector3.one;
+		base.transform.localRotation = Quaternion.identity;
+		mAttachedCharacter = null;
+		mSpeed = 1f;
 		mCachedTransform = base.transform;
-		mAnimPlayer = GetComponent<TaggedAnimPlayer>();
-		if (mAnimPlayer == null)
+		SetFacing(FacingType.Right);
+		if (mAutoPaperdoll == null)
 		{
-			Debug.LogWarning("Tagged Animation Player was NOT found on GameObject: " + base.gameObject.name, base.gameObject);
-			mAnimPlayer = base.gameObject.AddComponent<TaggedAnimPlayer>();
+			mAutoPaperdoll = GetComponent<AutoPaperdoll>();
 		}
+		if (mSoundPlayer == null)
+		{
+			mSoundPlayer = GetComponent<UdamanSoundThemePlayer>();
+		}
+		UpdateRandomAnimSets();
+		isCharging = false;
+		mMaterialSwitchIgnoreObjects.Clear();
+		Init();
+	}
+
+	public void ResetPaperdoll()
+	{
 		mAutoPaperdoll = GetComponent<AutoPaperdoll>();
-		mSoundPlayer = GetComponent<SoundThemePlayer>();
-		if (randomAnimSets != null)
-		{
-			RandomAnimSet[] array = randomAnimSets;
-			foreach (RandomAnimSet randomAnimSet in array)
-			{
-				mRandomAnimSets.Add(randomAnimSet.name, randomAnimSet);
-			}
-		}
 	}
 
 	public void Start()
 	{
 		xPos = mCachedTransform.position.x;
-		if (snapToGround && WeakGlobalInstance<RailManager>.instance != null)
+		if (snapToGround && WeakGlobalInstance<RailManager>.Instance != null)
 		{
-			mCachedTransform.position = new Vector3(Mathf.Clamp(xPos, WeakGlobalInstance<RailManager>.instance.GetMinX(mCachedTransform.position.z), WeakGlobalInstance<RailManager>.instance.GetMaxX(mCachedTransform.position.z)), WeakGlobalInstance<RailManager>.instance.GetY(mCachedTransform.position.z), mCachedTransform.position.z);
+			mCachedTransform.position = new Vector3(Mathf.Clamp(xPos, WeakGlobalInstance<RailManager>.Instance.GetMinX(mCachedTransform.position.z), WeakGlobalInstance<RailManager>.Instance.GetMaxX(mCachedTransform.position.z)), WeakGlobalInstance<RailManager>.Instance.GetY(mCachedTransform.position.z), mCachedTransform.position.z);
 		}
+		Renderer[] componentsInChildren = base.gameObject.GetComponentsInChildren<Renderer>();
+		foreach (Renderer renderer in componentsInChildren)
+		{
+			renderer.enabled = false;
+			if (materialOverride != null)
+			{
+				renderer.sharedMaterial = materialOverride;
+			}
+		}
+		isPitThrown = false;
 	}
 
 	public void Update()
 	{
-		mStunnedTimer = Mathf.Max(0f, mStunnedTimer - Time.deltaTime);
+		if (mFirstUpdate)
+		{
+			mFirstUpdate = false;
+			PlaySoundEvent("Spawn");
+			Renderer[] componentsInChildren = base.gameObject.GetComponentsInChildren<Renderer>();
+			foreach (Renderer renderer in componentsInChildren)
+			{
+				renderer.enabled = true;
+			}
+		}
+		if (mStunnedTimer > 0f)
+		{
+			mStunnedTimer = Mathf.Max(0f, mStunnedTimer - Time.deltaTime);
+			if (mStunnedTimer <= 0f)
+			{
+				SetBaseAnimToIdle();
+			}
+		}
+		UpdateScale();
+		if (mAttachedCharacter != null)
+		{
+			mAttachedCharacter.transform.localPosition = Vector3.zero;
+		}
 		if (impactPauseTime > 0f)
 		{
-			mAnimPlayer.paused = true;
+			base.paused = true;
 			impactPauseTime -= Time.deltaTime;
 			if (!(impactPauseTime <= 0f))
 			{
@@ -383,16 +554,37 @@ public class CharacterModelController : MonoBehaviour
 			}
 			impactPauseTime = 0f;
 		}
-		else if (mAnimPlayer.paused)
+		else if (base.paused)
 		{
-			mAnimPlayer.paused = false;
+			base.paused = false;
 		}
 		if (startedDieAnim && !isAnimationPlaying && mPostDeathAction != 0 && mPostDeathAction != EPostDeathAction.stay)
 		{
 			StartPostDeathAction();
 		}
+		if (isCharging)
+		{
+			UpdateCharging();
+			return;
+		}
 		UpdateWalking();
 		UpdateAttackDelivery();
+	}
+
+	public override void PlayAnimation(string anim)
+	{
+		mPlayingVictoryAnim = false;
+		base.PlayAnimation(anim);
+	}
+
+	public void ShowRoomWalk()
+	{
+		SetBaseAnim("walk");
+		if (base.animPlayer.baseAnimState != null)
+		{
+			base.animPlayer.baseAnimTime = UnityEngine.Random.Range(0f, base.animPlayer.baseAnimState.length);
+		}
+		facing = mWalkDirection;
 	}
 
 	public void StartWalkLeft()
@@ -418,15 +610,15 @@ public class CharacterModelController : MonoBehaviour
 		mPlayingVictoryAnim = false;
 		if (mWalkDirection != facing && HasAnim("backpedal"))
 		{
-			if (mAnimPlayer.currAnim == "backpedal" && HasAnim("runback") && mAnimPlayer.currAnimTime >= 1.3f)
+			if (base.baseAnim == "backpedal" && HasAnim("runback") && base.currAnimTime >= MaxBackPedalTime)
 			{
-				if (mAnimPlayer.baseAnim != "runback")
+				if (base.baseAnim != "runback")
 				{
 					SetBaseAnim("runback");
 					PlayAnimation("backpedalturn");
 				}
 			}
-			else if (mAnimPlayer.baseAnim != "runback")
+			else if (base.baseAnim != "runback")
 			{
 				SetBaseAnim("backpedal");
 			}
@@ -438,7 +630,7 @@ public class CharacterModelController : MonoBehaviour
 		}
 		if (currentAnimation != "backpedalturn")
 		{
-			mAnimPlayer.RevertToBaseAnim();
+			RevertToBaseAnim();
 		}
 	}
 
@@ -453,7 +645,7 @@ public class CharacterModelController : MonoBehaviour
 		StopWalking();
 		if (!isInHurtState)
 		{
-			mAnimPlayer.RevertToBaseAnim();
+			RevertToBaseAnim();
 		}
 	}
 
@@ -465,14 +657,12 @@ public class CharacterModelController : MonoBehaviour
 		}
 		bool flag = HasAnim("victoryloop");
 		StopWalking();
-		mCurrentAnim = "victory";
-		mAnimPlayer.PlayAnim(GetRandomAnim("victory"), mAnimPlayer.GetDefaultBlendSpeed("victory"), flag ? WrapMode.Once : WrapMode.Loop);
+		PlayAnimGroupRandom("victory", flag ? WrapMode.Once : WrapMode.Loop);
 		if (flag)
 		{
-			TaggedAnimPlayer taggedAnimPlayer = mAnimPlayer;
-			taggedAnimPlayer.currAnimDoneCallback = (TaggedAnimPlayer.TaggedAnimCallback)Delegate.Combine(taggedAnimPlayer.currAnimDoneCallback, (TaggedAnimPlayer.TaggedAnimCallback)delegate
+			base.currAnimDoneCallback = (TaggedAnimPlayer.TaggedAnimCallback)Delegate.Combine(base.currAnimDoneCallback, (TaggedAnimPlayer.TaggedAnimCallback)delegate
 			{
-				mAnimPlayer.PlayAnim("victoryloop", mAnimPlayer.GetDefaultBlendSpeed("victoryloop"), WrapMode.Loop);
+				PlayAnimGroup("victoryloop", WrapMode.Loop);
 			});
 		}
 		mPlayingVictoryAnim = true;
@@ -482,11 +672,15 @@ public class CharacterModelController : MonoBehaviour
 	{
 		StopWalking();
 		PlayAnimation("attack", inMaxTime);
-		SetBaseAnim("attackidle");
 		attackActive = false;
 		mAttackDeliveryTriggered = false;
 		animEndedCallback = ClearAttackCallback;
 		mOnAttackDelivery = onMeleeAttackDelivery;
+		isAttacking = true;
+		if (onMeleeAttack != null)
+		{
+			onMeleeAttack(true);
+		}
 	}
 
 	public void RangeAttack(float inMaxTime)
@@ -531,7 +725,7 @@ public class CharacterModelController : MonoBehaviour
 
 	public void PlaySoundEvent(string theSoundEvent)
 	{
-		if ((bool)mSoundPlayer)
+		if (WeakGlobalMonoBehavior<InGameImpl>.Exists && (bool)mSoundPlayer)
 		{
 			mSoundPlayer.PlaySoundEvent(theSoundEvent);
 		}
@@ -539,12 +733,45 @@ public class CharacterModelController : MonoBehaviour
 
 	public GameObject SpawnEffectAtJoint(GameObject effectPrefab, string theJointLabel, bool andAttach)
 	{
-		return mAutoPaperdoll.InstantiateObjectOnJoint(effectPrefab, theJointLabel, andAttach);
+		if (!WeakGlobalMonoBehavior<InGameImpl>.Exists)
+		{
+			return null;
+		}
+		GameObject gameObject = mAutoPaperdoll.InstantiateObjectOnJoint(effectPrefab, theJointLabel, andAttach);
+		EffectKiller.AddKiller(gameObject, GameObjectPool.DefaultObjectPool);
+		AddMaterialSwitchIgnoreObj(gameObject);
+		return gameObject;
+	}
+
+	public GameObject SpawnEffectAtJoint(GameObject effectPrefab, string theJointLabel, bool andAttach, float maxTime)
+	{
+		if (!WeakGlobalMonoBehavior<InGameImpl>.Exists)
+		{
+			return null;
+		}
+		GameObject gameObject = mAutoPaperdoll.InstantiateObjectOnJoint(effectPrefab, theJointLabel, andAttach);
+		EffectKiller effectKiller = EffectKiller.AddKiller(gameObject, GameObjectPool.DefaultObjectPool);
+		effectKiller.maxLifetime = maxTime;
+		AddMaterialSwitchIgnoreObj(gameObject);
+		return gameObject;
+	}
+
+	public GameObject SpawnEffectAt(GameObject effectPrefab, Vector3 location)
+	{
+		if (!WeakGlobalMonoBehavior<InGameImpl>.Exists)
+		{
+			return null;
+		}
+		GameObject gameObject = GameObjectPool.DefaultObjectPool.Acquire(effectPrefab);
+		gameObject.transform.position = location;
+		EffectKiller.AddKiller(gameObject, GameObjectPool.DefaultObjectPool);
+		AddMaterialSwitchIgnoreObj(gameObject);
+		return gameObject;
 	}
 
 	public GameObject InstantiateObjectOnJoint(GameObject prefab, string theJointLabel)
 	{
-		return SpawnEffectAtJoint(prefab, theJointLabel, true);
+		return mAutoPaperdoll.InstantiateObjectOnJoint(prefab, theJointLabel, true);
 	}
 
 	public void PerformSpecialAction(string theAnimName, Action onAttackDelivery)
@@ -567,6 +794,16 @@ public class CharacterModelController : MonoBehaviour
 		mOnAttackDelivery = onAttackDelivery;
 	}
 
+	public void PerformSpecialActionNoAttack(string theAnimName, Action onEndAnim)
+	{
+		StopWalking();
+		PlayAnimation(theAnimName);
+		attackActive = false;
+		mAttackDeliveryTriggered = false;
+		animEndedCallback = onEndAnim;
+		mOnAttackDelivery = null;
+	}
+
 	public void PlayHurtAnim(string theAnimName)
 	{
 		if (HasAnim(theAnimName))
@@ -581,7 +818,17 @@ public class CharacterModelController : MonoBehaviour
 		}
 	}
 
-	public void Knockback()
+	public void LoopStunAnim(string theAnimName)
+	{
+		if (HasAnim(theAnimName))
+		{
+			StopWalking();
+			SetBaseAnim(theAnimName);
+			RevertToBaseAnim(0f);
+		}
+	}
+
+	public void Knockback(Vector3 addedTranslation)
 	{
 		StopWalking();
 		if (HasAnim("knockback"))
@@ -593,9 +840,25 @@ public class CharacterModelController : MonoBehaviour
 		}
 		else
 		{
-			mAnimPlayer.RevertToBaseAnim();
+			RevertToBaseAnim();
 		}
-		mKnockbackTime = 0.5f;
+		Vector3 vector = addedTranslation;
+		float num2 = addedTranslation.y + 0.62f;
+		vector.y = 0f;
+		KnockbackTargetPoint = base.transform.position + vector;
+		float magnitude = vector.magnitude;
+		float num3 = (mTotalKnockbackTime = magnitude / 2f);
+		mKnockbackTime = mTotalKnockbackTime;
+		mKnockbackVelocity = vector / magnitude * 2f;
+		float num4 = 2f * num2 / num3;
+		mKnockbackAcceleration = 4f * (num2 - num4 * num3) / (num3 * num3);
+		mKnockbackVelocity.y = num4;
+	}
+
+	public void Jump()
+	{
+		StopWalking();
+		mJumpTime = 0.75f;
 	}
 
 	public void DeliverAttack()
@@ -620,7 +883,7 @@ public class CharacterModelController : MonoBehaviour
 		}
 		startedDieAnim = true;
 		StopWalking();
-		mAnimPlayer.ClearBaseAnim();
+		ClearBaseAnim();
 		speedModifier = 1f;
 		if (HasAnim(animName))
 		{
@@ -669,43 +932,45 @@ public class CharacterModelController : MonoBehaviour
 		SetArrowVisible(false);
 	}
 
-	public void SetArrowVisible(bool v, Projectile.EProjectileType type)
+	public void SetArrowVisible(bool v, string type)
 	{
-		if (ProjectileManager.ProjectileShownWhileAiming(type))
+		if (WeakGlobalInstance<ProjectileManager>.Instance.ProjectileShownWhileAiming(type))
 		{
-			if (projectilePrefab == null)
-			{
-				projectilePrefab = WeakGlobalInstance<ProjectileManager>.instance.PrefabForProjectile(type);
-			}
+			ProjectileType = type;
 			SetArrowVisible(v);
 		}
 	}
 
 	public void SetArrowVisible(bool v)
 	{
-		if (!(projectilePrefab == null))
+		if (!string.IsNullOrEmpty(ProjectileType))
 		{
 			if (!v && mProjectileInstance != null)
 			{
 				UnityEngine.Object.Destroy(mProjectileInstance);
 				mProjectileInstance = null;
 			}
-			else if (v && mProjectileInstance == null && (bool)projectilePrefab && mAutoPaperdoll.HasJoint("arrow"))
+			else if (v && mProjectileInstance == null && mAutoPaperdoll.HasJoint("arrow"))
 			{
-				mProjectileInstance = mAutoPaperdoll.InstantiateObjectOnJoint(projectilePrefab, "arrow");
+				ProjectileSchema projectileSchema = WeakGlobalInstance<ProjectileManager>.Instance[ProjectileType];
+				mProjectileInstance = mAutoPaperdoll.InstantiateObjectOnJoint(projectileSchema.prefab, projectileSchema.material, "arrow");
 			}
 		}
 	}
 
-	public void AimTowards(Projectile.EProjectileType projectileType, Vector3 targetPos)
+	public void AimTowards(string projectileType, Vector3 targetPos)
 	{
+		if (isPitThrown)
+		{
+			return;
+		}
 		AutoPaperdoll.LabeledJoint jointData = autoPaperdoll.GetJointData("aim_angle");
 		if (jointData == null || jointData.joint == null)
 		{
 			return;
 		}
 		Transform joint = jointData.joint;
-		Vector3 vector = ProjectileManager.ProjectileAimPosForTarget(projectileType, autoPaperdoll.GetJointPosition("projectile_spawn"), targetPos);
+		Vector3 vector = WeakGlobalInstance<ProjectileManager>.Instance.ProjectileAimPosForTarget(projectileType, autoPaperdoll.GetJointPosition("projectile_spawn"), targetPos);
 		Vector3 vector2 = vector - joint.position;
 		Vector3 from = vector2;
 		from.y = 0f;
@@ -745,6 +1010,10 @@ public class CharacterModelController : MonoBehaviour
 
 	public void ResetAimAngle()
 	{
+		if (isPitThrown)
+		{
+			return;
+		}
 		if (mAimAngle.HasValue)
 		{
 			mAimAngle = Mathf.MoveTowardsAngle(mAimAngle.Value, 0f, 150f * Time.deltaTime);
@@ -765,6 +1034,10 @@ public class CharacterModelController : MonoBehaviour
 
 	public void FaceTowards(Vector3 targetPos)
 	{
+		if (isPitThrown)
+		{
+			return;
+		}
 		Vector2 to = new Vector2(targetPos.z - mCachedTransform.position.z, targetPos.x - mCachedTransform.position.x);
 		float num = Mathf.Abs(Vector2.Angle(Vector2.right, to));
 		Vector3 eulerAngles = mCachedTransform.eulerAngles;
@@ -774,18 +1047,22 @@ public class CharacterModelController : MonoBehaviour
 			{
 				num = 0f - num;
 			}
-			eulerAngles.y = Mathf.MoveTowardsAngle(eulerAngles.y, num, 225f * Time.deltaTime);
+			eulerAngles.y = Mathf.MoveTowardsAngle(eulerAngles.y, num, 180f * Time.deltaTime);
 			mCachedTransform.eulerAngles = eulerAngles;
 		}
 	}
 
 	public void ResetFacingAngle()
 	{
+		if (isPitThrown)
+		{
+			return;
+		}
 		float num = baseFacingAngle;
 		Vector3 eulerAngles = mCachedTransform.eulerAngles;
 		if (eulerAngles.y != num)
 		{
-			eulerAngles.y = Mathf.MoveTowardsAngle(eulerAngles.y, num, 225f * Time.deltaTime);
+			eulerAngles.y = Mathf.MoveTowardsAngle(eulerAngles.y, num, 180f * Time.deltaTime);
 			if (isInHurtState)
 			{
 				eulerAngles.y = num;
@@ -796,12 +1073,6 @@ public class CharacterModelController : MonoBehaviour
 
 	public void Destroy()
 	{
-		UnityEngine.Object.Destroy(base.gameObject);
-	}
-
-	public bool HasAnim(string theAnimName)
-	{
-		return mRandomAnimSets.ContainsKey(theAnimName) || mAnimPlayer[theAnimName] != null || mAnimPlayer[theAnimName + "01"] != null;
 	}
 
 	private void UpdateWalking()
@@ -813,17 +1084,19 @@ public class CharacterModelController : MonoBehaviour
 		if (mKnockbackTime != 0f)
 		{
 			UpdateKnockback();
+			return;
 		}
-		else if (mWalkDirection != 0)
+		float num = mSpeed * mSpeedModifier;
+		if (base.baseAnim == "runback")
 		{
-			float num = (float)mWalkDirection * mSpeed * mSpeedModifier;
-			if (mAnimPlayer.baseAnim == "runback")
-			{
-				num *= float.Parse(Singleton<Config>.instance.root.to("Game")["runbackspeedmult"]);
-			}
-			MoveBy(num * Time.deltaTime);
-			mAnimPlayer.baseAnimSpeed = Mathf.Abs(num / animatedWalkSpeed);
+			num *= Singleton<Config>.Instance.data.GetFloat(TextDBSchema.ChildKey("Game", "runbackspeedmult"));
 		}
+		if (mWalkDirection != 0)
+		{
+			num *= (float)mWalkDirection;
+			MoveBy(num * Time.deltaTime);
+		}
+		base.baseAnimSpeed = Mathf.Abs(num / animatedWalkSpeed);
 	}
 
 	private void UpdateAttackDelivery()
@@ -845,22 +1118,40 @@ public class CharacterModelController : MonoBehaviour
 		}
 	}
 
+	private void UpdateCharging()
+	{
+		if (mJumpTime != 0f)
+		{
+			UpdateJump();
+			return;
+		}
+		float z = base.transform.position.z;
+		float num = 5f * Time.deltaTime * (float)facing;
+		if (onChargeMove != null)
+		{
+			onChargeMove(z, z + num);
+		}
+		MoveBy(num);
+	}
+
 	private void MoveBy(float zDelta)
 	{
-		if (impactPauseTime > 0f || zDelta == 0f)
+		float z = mCachedTransform.position.z;
+		float num = Mathf.Clamp(mCachedTransform.position.z + zDelta, mConstraintLeft, mConstraintRight);
+		if ((impactPauseTime > 0f || zDelta == 0f) && z == num)
 		{
 			return;
 		}
-		float z = Mathf.Clamp(mCachedTransform.position.z + zDelta, mConstraintLeft, mConstraintRight);
-		if (snapToGround && mSnapThisUpdate && WeakGlobalInstance<RailManager>.instance != null)
+		mUpdatesUntilNextSnap--;
+		if (snapToGround && mUpdatesUntilNextSnap <= 0 && WeakGlobalInstance<RailManager>.Instance != null)
 		{
-			mCachedTransform.position = new Vector3(Mathf.Clamp(xPos, WeakGlobalInstance<RailManager>.instance.GetMinX(z), WeakGlobalInstance<RailManager>.instance.GetMaxX(z)), WeakGlobalInstance<RailManager>.instance.GetY(z), z);
+			mCachedTransform.position = new Vector3(Mathf.Clamp(xPos, WeakGlobalInstance<RailManager>.Instance.GetMinX(num), WeakGlobalInstance<RailManager>.Instance.GetMaxX(num)), WeakGlobalInstance<RailManager>.Instance.GetY(num), num);
+			mUpdatesUntilNextSnap = mUpdatesNoSnap;
 		}
 		else
 		{
-			mCachedTransform.position = new Vector3(mCachedTransform.position.x, mCachedTransform.position.y, z);
+			mCachedTransform.position = new Vector3(mCachedTransform.position.x, mCachedTransform.position.y, num);
 		}
-		mSnapThisUpdate = !mSnapThisUpdate;
 		if (facing == FacingType.Unchanged)
 		{
 			if (zDelta > 0f)
@@ -886,8 +1177,9 @@ public class CharacterModelController : MonoBehaviour
 			return;
 		}
 		mKnockbackTime -= Time.deltaTime;
-		float z = Mathf.Clamp(mCachedTransform.position.z - 200f * Time.deltaTime * (float)facing, mConstraintLeft, mConstraintRight);
-		float num = ((!snapToGround || WeakGlobalInstance<RailManager>.instance == null) ? mCachedTransform.position.y : WeakGlobalInstance<RailManager>.instance.GetY(z));
+		float z = Mathf.Clamp(mCachedTransform.position.z + mKnockbackVelocity.z * Time.deltaTime, mConstraintLeft, mConstraintRight);
+		float a = ((!snapToGround || WeakGlobalInstance<RailManager>.Instance == null) ? mCachedTransform.position.y : WeakGlobalInstance<RailManager>.Instance.GetY(z));
+		float num = mCachedTransform.position.y;
 		if (mKnockbackTime <= 0f)
 		{
 			if (HasAnim("knockbackland") && !startedDieAnim && !mPlayingHurtAnim)
@@ -902,10 +1194,46 @@ public class CharacterModelController : MonoBehaviour
 		}
 		else
 		{
-			float num2 = mKnockbackTime / 0.5f - 0.5f;
-			num += 32f - 128f * (num2 * num2);
+			num += mKnockbackVelocity.y * Time.deltaTime;
+			mKnockbackVelocity.y += mKnockbackAcceleration * Time.deltaTime;
+			num = Mathf.Max(a, num);
 		}
-		float x = Mathf.Clamp(xPos, WeakGlobalInstance<RailManager>.instance.GetMinX(z), WeakGlobalInstance<RailManager>.instance.GetMaxX(z));
+		float x = mCachedTransform.position.x + mKnockbackVelocity.x * Time.deltaTime;
+		mCachedTransform.position = new Vector3(x, num, z);
+	}
+
+	private void UpdateJump()
+	{
+		if (mJumpTime < 0f)
+		{
+			mJumpTime += Time.deltaTime;
+			if (mJumpTime > 0f)
+			{
+				mJumpTime = 0f;
+			}
+			return;
+		}
+		mJumpTime -= Time.deltaTime;
+		float z = Mathf.Clamp(mCachedTransform.position.z + 3f * Time.deltaTime * (float)facing, mConstraintLeft, mConstraintRight);
+		float num = ((!snapToGround || WeakGlobalInstance<RailManager>.Instance == null) ? mCachedTransform.position.y : WeakGlobalInstance<RailManager>.Instance.GetY(z));
+		if (mJumpTime <= 0f)
+		{
+			if (HasAnim("jumpland") && !startedDieAnim && !mPlayingHurtAnim)
+			{
+				PlayAnimation("jumpland");
+				mJumpTime = 0f;
+			}
+			else
+			{
+				mJumpTime = -0f;
+			}
+		}
+		else
+		{
+			float num2 = mJumpTime / 0.75f - 0.5f;
+			num += 1.25f - 5f * (num2 * num2);
+		}
+		float x = Mathf.Clamp(xPos, WeakGlobalInstance<RailManager>.Instance.GetMinX(z), WeakGlobalInstance<RailManager>.Instance.GetMaxX(z));
 		mCachedTransform.position = new Vector3(x, num, z);
 	}
 
@@ -917,94 +1245,6 @@ public class CharacterModelController : MonoBehaviour
 			eulerAngles.y = ((newFacing == FacingType.Left) ? 180 : 0);
 			mCachedTransform.eulerAngles = eulerAngles;
 			mFacing = newFacing;
-		}
-	}
-
-	private string GetRandomAnim(string anim)
-	{
-		RandomAnimSet value;
-		if (mRandomAnimSets != null && mRandomAnimSets.TryGetValue(anim, out value))
-		{
-			if (value.onlyRandomizeOnce)
-			{
-				int? mLastClipIndexChosen = value.mLastClipIndexChosen;
-				if (mLastClipIndexChosen.HasValue)
-				{
-					return value.clips[value.mLastClipIndexChosen.Value].name;
-				}
-			}
-			int num = RandomRangeInt.between(0, value.clips.Length - 1);
-			int? mLastClipIndexChosen2 = value.mLastClipIndexChosen;
-			if (mLastClipIndexChosen2.HasValue && value.clips.Length >= 3)
-			{
-				while (value.mLastClipIndexChosen == num)
-				{
-					num = RandomRangeInt.between(0, value.clips.Length - 1);
-				}
-			}
-			value.mLastClipIndexChosen = num;
-			AnimationClip animationClip = value.clips[num];
-			if (animationClip != null)
-			{
-				return animationClip.name;
-			}
-		}
-		if ((bool)mAnimPlayer[anim])
-		{
-			return anim;
-		}
-		if ((bool)mAnimPlayer[anim + "01"])
-		{
-			return anim + "01";
-		}
-		return string.Empty;
-	}
-
-	private string LastRandomAnim(string anim)
-	{
-		RandomAnimSet value;
-		if (mRandomAnimSets != null && mRandomAnimSets.TryGetValue(anim, out value))
-		{
-			int? mLastClipIndexChosen = value.mLastClipIndexChosen;
-			if (mLastClipIndexChosen.HasValue)
-			{
-				return value.clips[value.mLastClipIndexChosen.Value].name;
-			}
-			return string.Empty;
-		}
-		if ((bool)mAnimPlayer[anim])
-		{
-			return anim;
-		}
-		if ((bool)mAnimPlayer[anim + "01"])
-		{
-			return anim + "01";
-		}
-		return string.Empty;
-	}
-
-	private void PlayAnimation(string anim)
-	{
-		mPlayingVictoryAnim = false;
-		mCurrentAnim = anim;
-		mAnimPlayer.PlayAnim(GetRandomAnim(anim), mAnimPlayer.GetDefaultBlendSpeed(anim), WrapMode.Once, speedModifier);
-	}
-
-	private void PlayAnimation(string anim, float inMaxTime)
-	{
-		PlayAnimation(anim);
-		if (mAnimPlayer.currAnimState.length > inMaxTime)
-		{
-			mAnimPlayer.currAnimSpeed *= mAnimPlayer.currAnimState.length / inMaxTime;
-		}
-	}
-
-	private void SetBaseAnim(string anim)
-	{
-		if (!(mAnimPlayer.baseAnim == LastRandomAnim(anim)))
-		{
-			mAnimPlayer.SetBaseAnim(GetRandomAnim(anim));
-			mAnimPlayer.baseAnimSpeed = speedModifier;
 		}
 	}
 
@@ -1026,7 +1266,7 @@ public class CharacterModelController : MonoBehaviour
 
 	private void LateUpdate()
 	{
-		if (!mAimAngle.HasValue || mAnimPlayer.paused)
+		if (!mAimAngle.HasValue || base.paused)
 		{
 			return;
 		}
@@ -1050,10 +1290,104 @@ public class CharacterModelController : MonoBehaviour
 	private void ClearAttackCallback()
 	{
 		mOnAttackDelivery = null;
+		isAttacking = false;
+		if (onMeleeAttack != null)
+		{
+			onMeleeAttack(false);
+		}
 	}
 
 	private void ClearPlayingHurtAnim()
 	{
 		mPlayingHurtAnim = false;
+	}
+
+	public void ChargeWithAnim(string animName)
+	{
+		Jump();
+		SetBaseAnim(animName);
+		isCharging = true;
+	}
+
+	public void AddMaterialSwitchIgnoreObj(GameObject objToIgnore)
+	{
+		if (objToIgnore == null || mMaterialSwitchIgnoreObjects.Contains(objToIgnore))
+		{
+			return;
+		}
+		for (int num = mMaterialSwitchIgnoreObjects.Count - 1; num >= 0; num--)
+		{
+			if (mMaterialSwitchIgnoreObjects[num] == null || !mMaterialSwitchIgnoreObjects[num].activeSelf)
+			{
+				mMaterialSwitchIgnoreObjects.RemoveAt(num);
+			}
+		}
+		mMaterialSwitchIgnoreObjects.Add(objToIgnore);
+	}
+
+	public List<GameObject> GetMaterialSwitchIgnoreObjects()
+	{
+		return mMaterialSwitchIgnoreObjects;
+	}
+
+	public void AttachCharacterToJoint(CharacterModelController toAttach, AutoPaperdoll.LabeledJoint jointData)
+	{
+		mAttachedCharacter = toAttach;
+		Transform transform = mAttachedCharacter.gameObject.transform;
+		mAttachedToXForm = jointData.joint.transform;
+		transform.parent = jointData.joint.transform;
+		transform.localPosition = Vector3.zero;
+		transform.localRotation = Quaternion.identity;
+	}
+
+	public void DetachTarget()
+	{
+		if (mAttachedCharacter != null)
+		{
+			Transform transform = mAttachedCharacter.gameObject.transform;
+			if (transform.parent == mAttachedToXForm)
+			{
+				transform.parent = null;
+			}
+			mAttachedCharacter = null;
+			mAttachedToXForm = null;
+		}
+	}
+
+	public void SetScaleOverTime(float targetScale, float scaleTime)
+	{
+		mScaleTarget = targetScale;
+		if (scaleTime <= 0f)
+		{
+			mScale = targetScale;
+		}
+		else
+		{
+			mScaleRate = (mScaleTarget - mScale) / scaleTime;
+		}
+	}
+
+	private void UpdateScale()
+	{
+		float f = mScaleTarget - mScale;
+		if (Mathf.Abs(f) <= Mathf.Abs(mScaleRate * Time.deltaTime))
+		{
+			mScale = mScaleTarget;
+		}
+		mScale += mScaleRate * Time.deltaTime;
+		if (mScale != mOldScale)
+		{
+			mOldScale = mScale;
+			base.transform.localScale = Vector3.one * mScale;
+		}
+	}
+
+	public Vector3 GetRelativeJointPosition(string theJointLabel)
+	{
+		if (mAutoPaperdoll != null)
+		{
+			return mAutoPaperdoll.GetRelativeJointPosition(theJointLabel);
+		}
+		return Vector3.zero;
 	}
 }

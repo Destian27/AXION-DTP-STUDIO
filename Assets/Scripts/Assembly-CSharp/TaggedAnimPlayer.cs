@@ -38,6 +38,8 @@ public class TaggedAnimPlayer : MonoBehaviour
 
 	private const int kFirstEffectAnimLayer = 10;
 
+	public const string kTaggedAnimFolderName = "_anim_tags";
+
 	public Animation jointAnimation;
 
 	public float defaultBlendSpeed = 0.3f;
@@ -45,6 +47,8 @@ public class TaggedAnimPlayer : MonoBehaviour
 	public AnimOverrideSettings[] specificAnimSettings = new AnimOverrideSettings[0];
 
 	public bool alsoPlayOnAllChildren;
+
+	public string overrideAnimFolder;
 
 	[NonSerialized]
 	public bool autoReturnToBaseAnim = true;
@@ -455,7 +459,25 @@ public class TaggedAnimPlayer : MonoBehaviour
 
 	private void Awake()
 	{
+		autoReturnToBaseAnim = true;
+		animStartedCallback = null;
+		animDoneCallback = null;
+		currAnimDoneCallback = null;
+		currAnimChangedCallback = null;
+		animFrame = 0f;
+		actionAnimFadeOutSpeed = 0f;
+		extraAnimPlayers.Clear();
+		extraTaggedAnimPlayers.Clear();
 		mTaggedAnimation = base.GetComponent<Animation>();
+		mBaseAnim = null;
+		mBaseJointAnim = null;
+		mActionAnim = null;
+		mActionJointAnim = null;
+		mMaskedAnims.Clear();
+		mDefaultBlendSpeeds.Clear();
+		mNextEffectLayerToUse = 10;
+		mActiveBaseAnims.Clear();
+		mActiveActionAnims.Clear();
 		TaggedAnimPlayer[] componentsInChildren = GetComponentsInChildren<TaggedAnimPlayer>(true);
 		TaggedAnimPlayer[] array = componentsInChildren;
 		foreach (TaggedAnimPlayer taggedAnimPlayer in array)
@@ -546,13 +568,49 @@ public class TaggedAnimPlayer : MonoBehaviour
 				break;
 			}
 		}
+		if (flag)
+		{
+			return;
+		}
+		extraAnimPlayers.Add(theAnimationComponent);
+		if (theAnimationComponent.clip != null)
+		{
+			AnimationState animationState = theAnimationComponent[theAnimationComponent.clip.name];
+			if (animationState != null)
+			{
+				animationState.layer = -10;
+			}
+		}
+	}
+
+	public void UnregisterChildAnimationPlayer(Animation theAnimationComponent)
+	{
+		if (theAnimationComponent == null || theAnimationComponent == mTaggedAnimation || theAnimationComponent == jointAnimation)
+		{
+			return;
+		}
+		TaggedAnimPlayer component = theAnimationComponent.GetComponent<TaggedAnimPlayer>();
+		if (component != null)
+		{
+			extraTaggedAnimPlayers.Remove(component);
+			return;
+		}
+		bool flag = false;
+		foreach (TaggedAnimPlayer extraTaggedAnimPlayer in extraTaggedAnimPlayers)
+		{
+			if (extraTaggedAnimPlayer == null)
+			{
+				FlagNullChildPlayer();
+			}
+			else if (theAnimationComponent == extraTaggedAnimPlayer.mTaggedAnimation || theAnimationComponent == extraTaggedAnimPlayer.jointAnimation)
+			{
+				flag = true;
+				break;
+			}
+		}
 		if (!flag)
 		{
-			extraAnimPlayers.Add(theAnimationComponent);
-			if (theAnimationComponent.clip != null)
-			{
-				theAnimationComponent[theAnimationComponent.clip.name].layer = -10;
-			}
+			extraAnimPlayers.Remove(theAnimationComponent);
 		}
 	}
 
@@ -737,13 +795,8 @@ public class TaggedAnimPlayer : MonoBehaviour
 
 	public void RevertToBaseAnim(float theFadeOutTime)
 	{
-		if (mActionAnim == null)
+		if (mActionAnim == null || mBaseJointAnim == null)
 		{
-			return;
-		}
-		if (mBaseJointAnim == null)
-		{
-			Debug.LogWarning("RevertToBaseAnim called with no base anim active");
 			return;
 		}
 		string text = actionAnim;
@@ -1144,11 +1197,24 @@ public class TaggedAnimPlayer : MonoBehaviour
 
 	private void BlendOutActionAnim(Animation animPlayer, AnimationState actionAnim, float theFadeOutTime)
 	{
-		if (!(animPlayer == null))
+		if (animPlayer == null)
 		{
-			animPlayer.Blend(actionAnim.name, 0f, theFadeOutTime);
-			StartCoroutine(ConfirmActionAnimBlendingOut(actionAnim));
+			return;
 		}
+		if (!actionAnim.enabled)
+		{
+			string a = actionAnim.name + " - Queued Clone";
+			foreach (AnimationState item in animPlayer)
+			{
+				if (item.enabled && string.Equals(a, item.name))
+				{
+					actionAnim = item;
+					break;
+				}
+			}
+		}
+		animPlayer.Blend(actionAnim.name, 0f, theFadeOutTime);
+		StartCoroutine(ConfirmActionAnimBlendingOut(actionAnim));
 	}
 
 	private IEnumerator ConfirmActionAnimBlendingOut(AnimationState theAnim)
@@ -1176,7 +1242,7 @@ public class TaggedAnimPlayer : MonoBehaviour
 
 	private void FlagNullChildPlayer()
 	{
-		if (base.gameObject.activeSelf)
+		if (base.gameObject.activeInHierarchy)
 		{
 			StartCoroutine(ClearNullsFromChildPlayers());
 		}

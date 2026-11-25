@@ -1,60 +1,165 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class Helper : Character
 {
-	private bool mIsLeftToRightGameplay = true;
+	private static GameObjectPool characterPool = new GameObjectPool();
 
-	public Helper(GameObject prefab, float zTarget, Vector3 pos, string weaponPropLocation, bool weaponIsRanged)
+	private static float kChargeRange = 5f;
+
+	public static int kPlatinumLevel = 10;
+
+	private DataBundleRecordHandle<MaterialLookupSchema> materialLookupHandle { get; set; }
+
+	public GameRange chargeAttackGameRange
 	{
-		mIsLeftToRightGameplay = Singleton<PlayModesManager>.instance.gameDirection == PlayModesManager.GameDirection.LeftToRight;
-		ActivateHealthBar();
-		InitializeModel(prefab, weaponPropLocation, weaponIsRanged);
+		get
+		{
+			if (base.controller.facing == FacingType.Left)
+			{
+				return new GameRange(base.position.z - kChargeRange, base.position.z);
+			}
+			return new GameRange(base.position.z, base.position.z + kChargeRange);
+		}
+	}
+
+	public bool IsGolden { get; set; }
+
+	public Helper(CharacterData data, float zTarget, Vector3 pos, int playerId)
+	{
+		base.ownerId = playerId;
+		mIsLeftToRightGameplay = Singleton<PlayModesManager>.Instance.gameDirection == PlayModesManager.GameDirection.LeftToRight;
+		if (playerId == 1)
+		{
+			mIsLeftToRightGameplay = !mIsLeftToRightGameplay;
+		}
+		base.id = data.id;
+		InitializeModel(data);
 		base.controller.position = pos;
 		if (mIsLeftToRightGameplay)
 		{
-			base.controller.constraintLeft = WeakGlobalInstance<Smithy>.instance.helperSpawnArea.transform.position.z;
+			base.controller.constraintLeft = WeakGlobalMonoBehavior<InGameImpl>.Instance.GetLeadership(playerId).helperSpawnArea.transform.position.z;
 			base.controller.constraintRight = zTarget;
 		}
 		else
 		{
 			base.controller.constraintLeft = zTarget;
-			base.controller.constraintRight = WeakGlobalInstance<Smithy>.instance.helperSpawnArea.transform.position.z;
+			base.controller.constraintRight = WeakGlobalMonoBehavior<InGameImpl>.Instance.GetLeadership(playerId).helperSpawnArea.transform.position.z;
 		}
 		StartWalkingTowardGoal();
+		if (WeakGlobalInstance<WaveManager>.Instance != null)
+		{
+			HelperEnemySwapSchema[] helperEnemySwaps = WeakGlobalInstance<WaveManager>.Instance.helperEnemySwaps;
+			HelperEnemySwapSchema[] array = helperEnemySwaps;
+			foreach (HelperEnemySwapSchema helperEnemySwapSchema in array)
+			{
+				if (helperEnemySwapSchema.helperSwapFrom == (DataBundleRecordKey)base.id)
+				{
+					base.corruptionID = helperEnemySwapSchema.enemySwapTo;
+				}
+			}
+		}
+		base.BlocksHeroMovement = data.blocksHeroMovement;
+		SetMirroredSkeleton(!mIsLeftToRightGameplay);
+		SetDefaultFacing();
 	}
 
-	public void ReinitializeModel(GameObject prefab, string weaponPropLocation, bool weaponIsRanged)
+	public void ReinitializeModel(CharacterData data)
 	{
 		Vector3 vector = base.controller.position;
 		vector.x = base.controller.xPos;
 		float constraintLeft = base.controller.constraintLeft;
 		float constraintRight = base.controller.constraintRight;
-		InitializeModel(prefab, weaponPropLocation, weaponIsRanged);
+		InitializeModel(data);
 		base.controller.position = vector;
 		base.controller.constraintLeft = constraintLeft;
 		base.controller.constraintRight = constraintRight;
 		StartWalkingTowardGoal();
 	}
 
-	private void InitializeModel(GameObject prefab, string weaponPropLocation, bool weaponIsRanged)
+	private void InitializeModel(CharacterData data)
 	{
-		base.controlledObject = (GameObject)UnityEngine.Object.Instantiate(prefab);
-		if (weaponPropLocation != null)
+		string text = data.id;
+		if (WeakGlobalMonoBehavior<InGameImpl>.Exists)
 		{
-			if (weaponIsRanged)
+			GameObject characterObject = Singleton<HelpersDatabase>.Instance.GetCharacterObject(text, base.ownerId);
+			if (characterObject == null)
 			{
-				base.rangedWeaponPrefab = Resources.Load(weaponPropLocation) as GameObject;
+				base.controlledObject = CharacterSchema.Deserialize(data.record);
 			}
 			else
 			{
-				base.meleeWeaponPrefab = Resources.Load(weaponPropLocation) as GameObject;
+				base.controlledObject = characterPool.Acquire(characterObject);
+			}
+			base.controlledObject.transform.localScale = Vector3.one;
+			CheckForSpecialControllerActions();
+		}
+		else
+		{
+			base.controlledObject = CharacterSchema.Deserialize(data.record);
+		}
+		base.controlledObject.SetActive(true);
+		if (data.rangedWeaponPrefab != null)
+		{
+			base.rangedWeaponPrefab = data.rangedWeaponPrefab;
+		}
+		if (data.meleeWeaponPrefab != null)
+		{
+			base.meleeWeaponPrefab = data.meleeWeaponPrefab;
+			if (base.ownerId != 0 && WeakGlobalMonoBehavior<InGameImpl>.Instance.HasPeaceCharm())
+			{
+				SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource("Assets/Game/Resources/Props/Weapons/chickensword.prefab", 1);
+				if (cachedResource != null)
+				{
+					base.meleeWeaponPrefab = cachedResource.Resource as GameObject;
+				}
 			}
 		}
 		if (base.bowAttackRange > 0f && base.meleeAttackRange == 0f)
 		{
 			SetRangeAttackMode(true);
 		}
+		if (data.isCharger)
+		{
+			ChargeWalk();
+		}
+	}
+
+	private void OnChargeMove(float oldZ, float newZ)
+	{
+		List<Character> charactersInRange = WeakGlobalInstance<CharactersManager>.Instance.GetCharactersInRange(Mathf.Min(oldZ, newZ), Mathf.Max(oldZ, newZ), 1 - base.ownerId);
+		int num = base.knockbackPower;
+		foreach (Character item in charactersInRange)
+		{
+			if (CheckIfTargetValid(item) && (!item.isFlying || base.canMeleeFliers))
+			{
+				EAttackType attackType = EAttackType.Blunt;
+				if (base.meleeWeaponIsABlade)
+				{
+					attackType = EAttackType.Blade;
+				}
+				else if (base.exploseOnMelee)
+				{
+					attackType = EAttackType.Explosion;
+				}
+				PerformKnockback(item, num, false, Vector3.zero);
+				item.RecievedAttack(attackType, meleeDamage, this);
+				num -= 100;
+			}
+		}
+	}
+
+	protected void OnChargeFly()
+	{
+		base.controller.ChargeWithAnim("fly");
+		base.controller.onChargeMove = OnChargeMove;
+	}
+
+	protected void ChargeWalk()
+	{
+		base.controller.isCharging = true;
+		base.controller.onChargeMove = OnChargeMove;
 	}
 
 	public override void Update()
@@ -64,12 +169,36 @@ public class Helper : Character
 		{
 			return;
 		}
-		bool flag = ((!mIsLeftToRightGameplay) ? (base.controller.position.z <= base.controller.constraintLeft) : (base.controller.position.z >= base.controller.constraintRight));
-		if (WeakGlobalSceneBehavior<InGameImpl>.instance.playerWon)
+		float z = base.controller.position.z;
+		bool flag = ((base.controller.facing != FacingType.Right) ? (z <= base.controller.constraintLeft) : (z >= base.controller.constraintRight));
+		if (base.controller.isCharging)
 		{
-			base.controller.PlayVictoryAnim();
+			if (flag)
+			{
+				base.health = 0f;
+			}
 		}
-		else if (base.canMeleeAttack && IsInMeleeRangeOfOpponent(true))
+		else if (WeakGlobalMonoBehavior<InGameImpl>.Instance.gameOver)
+		{
+			if ((base.ownerId == 0 && WeakGlobalMonoBehavior<InGameImpl>.Instance.playerWon) || (base.ownerId != 0 && WeakGlobalMonoBehavior<InGameImpl>.Instance.enemiesWon))
+			{
+				base.controller.PlayVictoryAnim();
+			}
+			else if (Singleton<Profile>.Instance.inMultiplayerWave)
+			{
+				base.controller.Die();
+			}
+			else
+			{
+				base.controller.StopWalking();
+			}
+		}
+		else if (base.isBlastoffFlyer && IsInChargeRangeOfOpponent())
+		{
+			SetRangeAttackMode(false);
+			base.controller.PerformSpecialActionNoAttack("blastoff", OnChargeFly);
+		}
+		else if (base.canMeleeAttack && (IsInMeleeRangeOfOpponent(true) || (base.canMeleeProjectiles && IsInMeleeRangeOfProjectile())))
 		{
 			base.controller.SetUseCowerIdle(false);
 			SetRangeAttackMode(false);
@@ -81,12 +210,16 @@ public class Helper : Character
 			StartMeleeAttackDelayTimer();
 			base.controller.Attack(base.meleeAttackFrequency);
 		}
-		else if ((base.isSpellCasterOnAllies && base.canUseRangedAttack && IsInRangeOfHurtAlly(false)) || (base.canUseRangedAttack && base.stats.projectile == Projectile.EProjectileType.SpawnFriend && IsInBowRangeOfOpponent()))
+		else if ((base.isSpellCasterOnAllies && base.canUseRangedAttack && IsInRangeOfHurtAlly(false)) || (base.canUseRangedAttack && base.stats.projectile == "SpawnFriend" && IsInBowRangeOfOpponent()))
 		{
 			StartRangedAttackDelayTimer();
-			if (base.bowProjectile == Projectile.EProjectileType.SpawnFriend)
+			if (base.bowProjectile == "SpawnFriend")
 			{
-				UnityEngine.Object.Instantiate(Resources.Load("FX/DivineEnemy"), base.position + new Vector3(50f, 0f, 0f), Quaternion.identity);
+				SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource("Assets/Game/Resources/FX/DivineEnemy.prefab", 1);
+				if (cachedResource != null)
+				{
+					GameObjectPool.DefaultObjectPool.Acquire(cachedResource.Resource as GameObject, base.position + new Vector3(50f, 0f, 0f), Quaternion.identity);
+				}
 				base.controller.PerformSpecialAction("cast", base.OnCastSpawnAllies, base.bowAttackFrequency / 2f);
 			}
 			else
@@ -98,21 +231,30 @@ public class Helper : Character
 		{
 			SetRangeAttackMode(true);
 			StartRangedAttackDelayTimer();
-			base.singleAttackTarget = WeakGlobalInstance<CharactersManager>.instance.GetBestRangedAttackTarget(this, base.bowAttackExtGameRange);
+			base.singleAttackTarget = WeakGlobalInstance<CharactersManager>.Instance.GetBestRangedAttackTarget(this, base.bowAttackExtGameRange);
 			if (base.singleAttackTarget != null)
 			{
 				base.controller.RangeAttack(base.bowAttackFrequency);
 			}
+		}
+		else if (IsInBowRangeOfOpponent() && base.canMeleeProjectiles && base.timeSinceDamaged > 3f)
+		{
+			base.controller.SetUseCowerIdle(false);
+			base.controller.Idle();
 		}
 		else if (IsInMeleeRangeOfOpponent(false))
 		{
 			base.controller.SetUseCowerIdle(!IsInMeleeRangeOfOpponent(true));
 			base.controller.Idle();
 		}
-		else if (!base.canMove || flag || IsInBowRangeOfOpponent() || (base.isSpellCasterOnAllies && IsInRangeOfHurtAlly()))
+		else if (!base.canMove || flag || (IsInBowRangeOfOpponent() && !base.canMeleeProjectiles) || (base.isSpellCasterOnAllies && IsInRangeOfHurtAlly()) || (base.isMount && ((!base.LeftToRight) ? (base.transform.position.z - WeakGlobalMonoBehavior<InGameImpl>.Instance.GetHero(base.ownerId).position.z < 0f) : (WeakGlobalMonoBehavior<InGameImpl>.Instance.GetHero(base.ownerId).position.z - base.transform.position.z < 0f))))
 		{
 			base.controller.SetUseCowerIdle(false);
 			base.controller.Idle();
+			if (base.exploseOnMelee)
+			{
+				AttackByExploding();
+			}
 		}
 		else
 		{
@@ -123,14 +265,40 @@ public class Helper : Character
 
 	public override void Destroy()
 	{
-		base.Destroy();
+		if (WeakGlobalMonoBehavior<InGameImpl>.Exists && base.id != "Mount_Balanced")
+		{
+			GameObject gameObject = base.controlledObject;
+			Transform transform = gameObject.transform;
+			int childCount = transform.GetChildCount();
+			string text = Singleton<HelpersDatabase>.Instance.ModelName(base.id, base.ownerId);
+			for (int i = 0; i < childCount; i++)
+			{
+				Transform child = transform.GetChild(0);
+				if (child.name != text)
+				{
+					GameObjectPool.DefaultObjectPool.Release(child.gameObject);
+				}
+			}
+			characterPool.Release(base.controlledObject);
+			base.Destroy();
+		}
+		else
+		{
+			GameObject obj = base.controlledObject;
+			base.Destroy();
+			UnityEngine.Object.Destroy(obj);
+		}
+		if (materialLookupHandle != null)
+		{
+			materialLookupHandle.Unload();
+		}
 	}
 
-	public void SetSpawnOnDeath(string spawnHelperID, int num)
+	public void SetSpawnOnDeath(List<string> spawnHelperIDs, int num)
 	{
 		base.onDeathEvent = (Action)Delegate.Combine(base.onDeathEvent, (Action)delegate
 		{
-			SpawnOffspring(spawnHelperID, num);
+			SpawnOffspringMulti(spawnHelperIDs, num);
 		});
 	}
 
@@ -144,5 +312,20 @@ public class Helper : Character
 		{
 			base.controller.StartWalkLeft();
 		}
+	}
+
+	private void CheckForSpecialControllerActions()
+	{
+		base.isBlastoffFlyer = base.controller.HasAnim("blastoff") && base.controller.HasAnim("fly");
+	}
+
+	protected bool IsInChargeRangeOfOpponent()
+	{
+		return base.meleeAttackRange > 0f && WeakGlobalInstance<CharactersManager>.Instance.IsCharacterInRange(chargeAttackGameRange, 1 - base.ownerId, base.isGateRusher, base.canMeleeFliers, false, true, false);
+	}
+
+	protected override void OnDied()
+	{
+		WeakGlobalMonoBehavior<InGameImpl>.Instance.GetLeadership(base.ownerId).CheckForLeadershipCostBuff(base.id, (int leadership, int modifier) => leadership - modifier);
 	}
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class ModelMelter : MonoBehaviour
@@ -12,32 +11,46 @@ public class ModelMelter : MonoBehaviour
 
 	private float mShaderTimeLeft;
 
-	private float mTotalMeltTime;
+	private GameObject mGameObject;
 
-	private List<Material> mMaterials;
+	private GameObject mMelterGameObjectParent;
+
+	private GameObject mMelterGameObjectChild;
+
+	private GameObject mDieEffectObject;
+
+	private static GameObjectPool sObjectPool = new GameObjectPool();
+
+	private static void InitializeNewObjectMelt()
+	{
+	}
 
 	public static void MeltGameObject(GameObject theObject, Action onDone)
 	{
-		ModelMelter modelMelter = Initialize(theObject);
+		ModelMelter modelMelter = Initialize(theObject, false);
 		modelMelter.mDoneEvent = onDone;
-		modelMelter.ascendToTheHeavens = false;
-		UnityEngine.Object.Instantiate(Resources.Load("FX/EnemyDie"), theObject.transform.root.position, Quaternion.identity);
 	}
 
 	public static void AscendGameObject(GameObject theObject, Action onDone)
 	{
-		ModelMelter modelMelter = Initialize(theObject);
+		ModelMelter modelMelter = Initialize(theObject, true);
 		modelMelter.mDoneEvent = onDone;
-		modelMelter.ascendToTheHeavens = true;
-		UnityEngine.Object.Instantiate(Resources.Load("FX/AllyDie"), theObject.transform.root.position, Quaternion.identity);
 	}
 
-	private static ModelMelter Initialize(GameObject theObject)
+	private static ModelMelter Initialize(GameObject theObject, bool ascendToHeavens)
 	{
 		Vector3 position = theObject.transform.position;
-		GameObject gameObject = new GameObject("ModelMelterParent");
-		GameObject gameObject2 = new GameObject("ModelMelter");
-		ModelMelter result = gameObject2.AddComponent<ModelMelter>();
+		GameObject gameObject = sObjectPool.Acquire("ModelMelterParent");
+		GameObject gameObject2 = sObjectPool.Acquire("ModelMelter");
+		ModelMelter modelMelter = gameObject2.GetComponent<ModelMelter>();
+		if (modelMelter == null)
+		{
+			modelMelter = gameObject2.AddComponent<ModelMelter>();
+		}
+		else
+		{
+			modelMelter.enabled = true;
+		}
 		Renderer componentInChildren = theObject.GetComponentInChildren<SkinnedMeshRenderer>();
 		if (componentInChildren == null)
 		{
@@ -49,57 +62,69 @@ public class ModelMelter : MonoBehaviour
 			position.y = theObject.transform.position.y;
 		}
 		gameObject.transform.position = position;
+		gameObject.transform.localScale = Vector3.one;
 		gameObject2.transform.position = position;
 		gameObject2.transform.parent = gameObject.transform;
+		gameObject2.transform.localScale = Vector3.one;
 		theObject.transform.parent = gameObject2.transform;
-		return result;
+		theObject.transform.localScale = Vector3.one;
+		modelMelter.mGameObject = theObject;
+		modelMelter.mMelterGameObjectParent = gameObject;
+		modelMelter.mMelterGameObjectChild = gameObject2;
+		modelMelter.PostStartInitialize(ascendToHeavens);
+		return modelMelter;
 	}
 
-	private void Start()
+	private void PostStartInitialize(bool ascToHeavens)
 	{
-		mMaterials = new List<Material>();
-		Renderer[] componentsInChildren = GetComponentsInChildren<SkinnedMeshRenderer>();
-		Renderer[] array = componentsInChildren;
-		foreach (Renderer renderer in array)
-		{
-			mMaterials.AddRange(renderer.materials);
-		}
-		componentsInChildren = GetComponentsInChildren<MeshRenderer>();
-		Renderer[] array2 = componentsInChildren;
-		foreach (Renderer renderer2 in array2)
-		{
-			mMaterials.AddRange(renderer2.materials);
-		}
-		foreach (Material mMaterial in mMaterials)
-		{
-			mMaterial.shader = Resources.Load("Shaders/DiffuseWithColorIntensity") as Shader;
-		}
-		ParticleEmitter[] componentsInChildren2 = GetComponentsInChildren<ParticleEmitter>();
-		ParticleEmitter[] array3 = componentsInChildren2;
-		foreach (ParticleEmitter particleEmitter in array3)
+		ParticleEmitter[] componentsInChildren = GetComponentsInChildren<ParticleEmitter>();
+		ParticleEmitter[] array = componentsInChildren;
+		foreach (ParticleEmitter particleEmitter in array)
 		{
 			if (particleEmitter != null)
 			{
 				particleEmitter.emit = false;
 			}
 		}
-		Animation[] componentsInChildren3 = base.gameObject.GetComponentsInChildren<Animation>();
-		Animation[] array4 = componentsInChildren3;
-		foreach (Animation animation in array4)
+		Animation[] componentsInChildren2 = base.gameObject.GetComponentsInChildren<Animation>();
+		Animation[] array2 = componentsInChildren2;
+		foreach (Animation animation in array2)
 		{
 			if (animation != null)
 			{
-				animation.enabled = false;
+				animation.Stop();
 			}
 		}
-		Animation animation2 = base.gameObject.AddComponent<Animation>();
+		Animation animation2 = base.gameObject.GetComponent<Animation>();
+		if (animation2 == null)
+		{
+			animation2 = base.gameObject.AddComponent<Animation>();
+		}
 		AnimationClip animationClip = null;
-		animationClip = ((!ascendToTheHeavens) ? (Resources.Load("FX/ModelMeltDown") as AnimationClip) : (Resources.Load("FX/ModelMeltUp") as AnimationClip));
+		ascendToTheHeavens = ascToHeavens;
+		if (ascendToTheHeavens)
+		{
+			animationClip = ResourceCache.GetCachedResource("Assets/Game/Resources/FX/ModelMeltUp.anim", 1).Resource as AnimationClip;
+			GameObject gameObject = ResourceCache.GetCachedResource("Assets/Game/Resources/FX/AllyDie.prefab", 1).Resource as GameObject;
+			if (gameObject != null)
+			{
+				mDieEffectObject = sObjectPool.Acquire(gameObject);
+			}
+		}
+		else
+		{
+			animationClip = ResourceCache.GetCachedResource("Assets/Game/Resources/FX/ModelMeltDown.anim", 1).Resource as AnimationClip;
+			GameObject gameObject2 = ResourceCache.GetCachedResource("Assets/Game/Resources/FX/EnemyDie.prefab", 1).Resource as GameObject;
+			if (gameObject2 != null)
+			{
+				mDieEffectObject = sObjectPool.Acquire(gameObject2);
+			}
+		}
+		mDieEffectObject.transform.position = base.transform.position;
 		if (animationClip != null)
 		{
 			animation2.AddClip(animationClip, "melt");
 			animation2.Play("melt");
-			mTotalMeltTime = animationClip.length;
 			mTimeLeft = animationClip.length;
 			mShaderTimeLeft = mTimeLeft;
 			if (ascendToTheHeavens)
@@ -107,10 +132,11 @@ public class ModelMelter : MonoBehaviour
 				mShaderTimeLeft *= 0.66f;
 			}
 		}
-		else
-		{
-			mTimeLeft = 0f;
-		}
+		ProceduralShaderManager.postShaderEvent(new DiffuseFadeInOutShaderEvent(mGameObject, (!ascendToTheHeavens) ? Color.black : Color.white, mShaderTimeLeft, 3f, 5f));
+	}
+
+	private void Start()
+	{
 	}
 
 	private void Update()
@@ -127,14 +153,15 @@ public class ModelMelter : MonoBehaviour
 			{
 				mDoneEvent();
 			}
-			UnityEngine.Object.Destroy(base.transform.root.gameObject);
-			return;
-		}
-		mShaderTimeLeft = Mathf.Max(0f, mShaderTimeLeft - Time.deltaTime);
-		foreach (Material mMaterial in mMaterials)
-		{
-			mMaterial.SetColor("_MainColor", (!ascendToTheHeavens) ? Color.black : Color.white);
-			mMaterial.SetFloat("_ColorIntensity", Mathf.Clamp(1f - mShaderTimeLeft / mTotalMeltTime, 0f, 1f));
+			mGameObject.transform.parent = null;
+			mGameObject = null;
+			mMelterGameObjectChild.transform.parent = null;
+			sObjectPool.Release(mMelterGameObjectParent);
+			sObjectPool.Release(mMelterGameObjectChild);
+			sObjectPool.Release(mDieEffectObject);
+			mMelterGameObjectParent = null;
+			mMelterGameObjectChild = null;
+			mDieEffectObject = null;
 		}
 	}
 }

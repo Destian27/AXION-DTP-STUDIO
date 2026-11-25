@@ -1,224 +1,168 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class HUDConsumables : SUISlideStripList.IController
+public class HUDConsumables : UIHandlerComponent
 {
-	private class Cell : SUISlideStripList.Cell
+	private class Card
 	{
-		private readonly float kCellsPriority = 5f;
+		private GameObject mParentObject;
 
-		public bool dirtyCounter = true;
+		private GluiStandardButtonContainer mButtonRef;
 
-		private string mPotionID;
+		private GluiSprite mIconRef;
 
-		private SUISprite icon;
+		private GluiText mTextRefQty;
 
-		private SUILabel countLabel;
+		private float mCooldownMax;
 
-		private int lastCount;
+		private float mCooldownCurrent;
 
-		public override Vector2 position
-		{
-			set
-			{
-				icon.position = value + new Vector2(40f, 55f);
-				countLabel.position = value + new Vector2(60f, 80f);
-			}
-		}
+		public string consumeID = string.Empty;
 
-		public override bool visible
-		{
-			set
-			{
-				icon.visible = value;
-				countLabel.visible = value;
-			}
-		}
+		private int quantity = -1;
 
-		public override float alpha
-		{
-			set
-			{
-				icon.alpha = value;
-				countLabel.alpha = value;
-			}
-		}
+		private bool wasAvailable;
 
-		private int counter
+		public bool isAvailable
 		{
 			get
 			{
-				return lastCount;
+				return mCooldownCurrent >= mCooldownMax && Singleton<Profile>.Instance.GetNumPotions(consumeID) > 0;
 			}
-			set
+		}
+
+		public Card(GameObject uiParent, string uiID, string consumeID, float cooldownMax)
+		{
+			this.consumeID = consumeID;
+			mCooldownMax = cooldownMax;
+			PotionSchema potionSchema = Singleton<PotionsDatabase>.Instance[consumeID];
+			mParentObject = uiParent.FindChild("HUD_" + uiID);
+			mButtonRef = mParentObject.FindChildComponent<GluiStandardButtonContainer>("Button_" + uiID);
+			mIconRef = mParentObject.FindChildComponent<GluiSprite>("Art_" + uiID);
+			mTextRefQty = mParentObject.FindChildComponent<GluiText>("Text_Qty");
+			mIconRef.Texture = potionSchema.icon;
+			WeakGlobalMonoBehavior<HUD>.Instance.RegisterOnPressEvent(mButtonRef, "CONSUME:" + consumeID);
+			if (!isAvailable)
 			{
-				if (value != lastCount)
+				mButtonRef.Locked = true;
+			}
+		}
+
+		public void Update(bool updateExpensiveVisuals)
+		{
+			mCooldownCurrent = Mathf.Min(mCooldownCurrent + Time.deltaTime, mCooldownMax);
+			int numPotions = Singleton<Profile>.Instance.GetNumPotions(consumeID);
+			if (quantity != numPotions)
+			{
+				quantity = numPotions;
+				mTextRefQty.Text = numPotions.ToString();
+			}
+			bool flag = isAvailable;
+			if (wasAvailable != flag)
+			{
+				wasAvailable = flag;
+				mButtonRef.Locked = !flag;
+			}
+		}
+
+		public void Hide()
+		{
+			mParentObject.SetActive(false);
+		}
+
+		public void Execute()
+		{
+			if (!(WeakGlobalMonoBehavior<InGameImpl>.Instance.hero.health > 0f))
+			{
+				return;
+			}
+			if (isAvailable)
+			{
+				if (Singleton<PotionsDatabase>.Instance.Execute(consumeID))
 				{
-					countLabel.text = value.ToString();
-					lastCount = value;
+					Singleton<Profile>.Instance.SetNumPotions(consumeID, Singleton<Profile>.Instance.GetNumPotions(consumeID) - 1);
+					mCooldownCurrent = 0f;
+					Singleton<Profile>.Instance.globalPlayerRating += 20;
+					switch (consumeID)
+					{
+					case "healthPotion":
+						Singleton<PlayStatistics>.Instance.data.sushiUsed++;
+						Singleton<Achievements>.Instance.IncrementAchievement("UseSushi1", 1);
+						Singleton<Achievements>.Instance.IncrementAchievement("UseSushi2", 1);
+						break;
+					case "leadershipPotion":
+						Singleton<PlayStatistics>.Instance.data.teaUsed++;
+						Singleton<Achievements>.Instance.IncrementAchievement("UseTea1", 1);
+						Singleton<Achievements>.Instance.IncrementAchievement("UseTea2", 1);
+						break;
+					}
 				}
 			}
-		}
-
-		public Cell(string potionID, string iconFile, int counterVal)
-		{
-			mPotionID = potionID;
-			float num = ((!SUIScreen.aspectRatioStandard) ? 0.8f : 1f);
-			icon = new SUISprite(iconFile);
-			icon.priority = kCellsPriority;
-			icon.scale = new Vector2(num, num);
-			countLabel = new SUILabel("default18");
-			countLabel.priority = kCellsPriority + 0.1f;
-			countLabel.anchor = TextAnchor.MiddleCenter;
-			countLabel.shadowColor = Color.black;
-			countLabel.shadowOffset = new Vector2(2f, 2f);
-			countLabel.text = counterVal.ToString();
-			lastCount = counterVal;
-		}
-
-		public override void Destroy()
-		{
-			if (icon != null)
+			else if (Singleton<Profile>.Instance.wave_SinglePlayerGame != 1 || Singleton<Profile>.Instance.GetWaveLevel(1) > 1 || Singleton<Profile>.Instance.inMultiplayerWave)
 			{
-				icon.Destroy();
-				icon = null;
-			}
-			if (countLabel != null)
-			{
-				countLabel.Destroy();
-				countLabel = null;
-			}
-		}
-
-		public override void Update()
-		{
-			if (dirtyCounter)
-			{
-				counter = Singleton<Profile>.instance.GetNumPotions(mPotionID);
-				dirtyCounter = false;
+				WeakGlobalMonoBehavior<InGameImpl>.Instance.gamePaused = true;
+				GluiActionSender.SendGluiAction("POPUP_CONFIRMPURCHASE", WeakGlobalMonoBehavior<HUD>.Instance.gameObject, StoreAvailability.GetPotion(consumeID));
 			}
 		}
 	}
 
-	private readonly Vector2 kCenterPosition = new Vector2(944f, 130f);
+	private const string kConsumeCmd = "CONSUME:";
 
-	private readonly Vector2 kCellSize = new Vector2(80f, 110f);
+	private List<Card> mCards = new List<Card>(2);
 
-	private List<string> mAvailablePotions = new List<string>();
-
-	private SUISlideStripList mStrip;
-
-	private SUISprite mArrowLeftRef;
-
-	private SUISprite mArrowRightRef;
-
-	private event OnSUIGenericCallback OnDirtyCellCounters;
-
-	public HUDConsumables(SUILayout layout)
+	public HUDConsumables(GameObject uiParent)
 	{
-		bool flag = WeakGlobalInstance<Smithy>.instance.numTypes > 0;
-		mArrowLeftRef = (SUISprite)layout["consumArrowLeft"];
-		mArrowRightRef = (SUISprite)layout["consumArrowRight"];
-		string[] allIDsForActivePlayMode = Singleton<PotionsDatabase>.instance.allIDsForActivePlayMode;
-		foreach (string text in allIDsForActivePlayMode)
-		{
-			if ((flag || !(Singleton<PotionsDatabase>.instance.GetAttribute(text, "leadership") != string.Empty)) && bool.Parse(Singleton<PotionsDatabase>.instance.GetAttribute(text, "gameHud")))
-			{
-				mAvailablePotions.Add(text);
-			}
-		}
-		mStrip = new SUISlideStripList(this, kCenterPosition, kCellSize);
-		mStrip.onIconTouched = OnIconTouched;
-		UpdateArrows();
-	}
-
-	public void Destroy()
-	{
-		if (mStrip != null)
-		{
-			mStrip.Destroy();
-			mStrip = null;
-		}
-	}
-
-	public void Update()
-	{
-		if (mStrip != null)
-		{
-			mStrip.Update();
-		}
-		UpdateArrows();
-	}
-
-	public void UpdateVisualsOnly()
-	{
-		if (mStrip != null)
-		{
-			mStrip.allowInputs = false;
-			mStrip.Update();
-			mStrip.allowInputs = true;
-		}
-	}
-
-	public void DirtyCellCounters()
-	{
-		if (this.OnDirtyCellCounters != null)
-		{
-			this.OnDirtyCellCounters();
-		}
-	}
-
-	public bool IsTouchZone(Vector2 pos)
-	{
-		Rect touchArea = mStrip.touchArea;
-		touchArea.x -= 200f;
-		touchArea.width += 300f;
-		return touchArea.Contains(pos);
-	}
-
-	private void UpdateArrows()
-	{
-		mArrowLeftRef.visible = mStrip.selected != 0;
-		mArrowRightRef.visible = mStrip.selected != mAvailablePotions.Count - 1;
-	}
-
-	private void OnIconTouched(int index)
-	{
-		if (WeakGlobalSceneBehavior<InGameImpl>.instance.gameOver || WeakGlobalSceneBehavior<InGameImpl>.instance.hero.health == 0f)
+		mCards.Add(new Card(uiParent, "Sushi", "healthPotion", 0f));
+		mCards.Add(new Card(uiParent, "Tea", "leadershipPotion", 0f));
+		int wavePlayed = Singleton<PlayStatistics>.Instance.data.wavePlayed;
+		if (Singleton<Profile>.Instance.MultiplayerData.IsMultiplayerGameSessionActive() || wavePlayed != 1 || Singleton<Profile>.Instance.GetWaveLevel(wavePlayed) > 1)
 		{
 			return;
 		}
-		string text = mAvailablePotions[index];
-		if (Singleton<Profile>.instance.GetNumPotions(text) == 0)
+		foreach (Card mCard in mCards)
 		{
-			WeakGlobalSceneBehavior<InGameImpl>.instance.ShowInGameStore(text);
+			mCard.Hide();
 		}
-		else if (Singleton<PotionsDatabase>.instance.Execute(text))
+		mCards.Clear();
+	}
+
+	public void Update(bool updateExpensiveVisuals)
+	{
+		for (int i = 0; i < mCards.Count; i++)
 		{
-			Singleton<Profile>.instance.SetNumPotions(text, Singleton<Profile>.instance.GetNumPotions(text) - 1);
-			DirtyCellCounters();
-			string attribute = Singleton<PotionsDatabase>.instance.GetAttribute(text, "pressedSound");
-			if (attribute != string.Empty)
+			if (NewInput.UseConsumable(i))
 			{
-				Singleton<SUISoundManager>.instance.Play(attribute);
+				mCards[i].Execute();
 			}
 		}
-	}
-
-	public int SlideStripList_NumEntries()
-	{
-		return mAvailablePotions.Count;
-	}
-
-	public SUISlideStripList.Cell SlideStripList_CreateCell(int dataIndex)
-	{
-		string potionID = mAvailablePotions[dataIndex];
-		Cell c = new Cell(potionID, Singleton<PotionsDatabase>.instance.GetAttribute(mAvailablePotions[dataIndex], "icon"), Singleton<Profile>.instance.GetNumPotions(potionID));
-		this.OnDirtyCellCounters = (OnSUIGenericCallback)Delegate.Combine(this.OnDirtyCellCounters, (OnSUIGenericCallback)delegate
+		foreach (Card mCard in mCards)
 		{
-			c.dirtyCounter = true;
-		});
-		return c;
+			mCard.Update(updateExpensiveVisuals);
+		}
+	}
+
+	public bool OnUIEvent(string eventID)
+	{
+		if (eventID.Length > "CONSUME:".Length && eventID.Substring(0, "CONSUME:".Length) == "CONSUME:")
+		{
+			TryConsume(eventID.Substring("CONSUME:".Length));
+			return true;
+		}
+		return false;
+	}
+
+	public void OnPause(bool pause)
+	{
+	}
+
+	private void TryConsume(string consumeID)
+	{
+		foreach (Card mCard in mCards)
+		{
+			if (mCard.consumeID == consumeID)
+			{
+				mCard.Execute();
+			}
+		}
 	}
 }

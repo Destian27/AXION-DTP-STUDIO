@@ -7,24 +7,9 @@ AnimationClip:
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
   m_Name: Pickup
+  m_AnimationType: 1
   m_Compressed: 0
-  m_RotationCurves:
-  - curve:
-      serializedVersion: 2
-      m_Curve:
-      - time: 0.51666665
-        value: {x: -0.049324755, y: 0.7053843, z: -0.049324755, w: -0.7053843}
-        inSlope: {x: 1.1175841E-06, y: 0, z: 1.1175841E-06, w: 0}
-        outSlope: {x: 1.1175841E-06, y: 0, z: 1.1175841E-06, w: 0}
-        tangentMode: 0
-      - time: 0.53333336
-        value: {x: -0.049324736, y: 0.7053843, z: -0.049324736, w: -0.7053843}
-        inSlope: {x: 1.1175841E-06, y: 0, z: 1.1175841E-06, w: 0}
-        outSlope: {x: 1.1175841E-06, y: 0, z: 1.1175841E-06, w: 0}
-        tangentMode: 0
-      m_PreInfinity: 2
-      m_PostInfinity: 2
-    path:
+  m_RotationCurves: []
   m_CompressedRotationCurves: []
   m_PositionCurves:
   - curve:
@@ -32,18 +17,13 @@ AnimationClip:
       m_Curve:
       - time: 0
         value: {x: 0, y: 0, z: 0}
-        inSlope: {x: 1.4214516E-23, y: 386.161, z: 0}
-        outSlope: {x: 2.292917E-39, y: 386.161, z: 0}
+        inSlope: {x: 0, y: 1.5246055, z: 0}
+        outSlope: {x: 2.286235E-39, y: 1.5246055, z: 0}
         tangentMode: 0
-      - time: 0.33333334
-        value: {x: 0, y: 128.72034, z: 0}
-        inSlope: {x: 1.4214516E-23, y: 0, z: 0}
-        outSlope: {x: 2.292917E-39, y: 0, z: 0}
-        tangentMode: 0
-      - time: 0.51666665
-        value: {x: 0, y: 128.25955, z: 0}
-        inSlope: {x: 0, y: 0, z: 0}
-        outSlope: {x: 0, y: 0, z: 0}
+      - time: 0.56666666
+        value: {x: 0, y: 0.8639431, z: 0}
+        inSlope: {x: 0, y: -2.2793238, z: 0}
+        outSlope: {x: 2.286235E-39, y: -2.2793238, z: 0}
         tangentMode: 0
       m_PreInfinity: 2
       m_PostInfinity: 2
@@ -51,16 +31,32 @@ AnimationClip:
   m_ScaleCurves: []
   m_FloatCurves: []
   m_SampleRate: 60
-  m_WrapMode: 1
+  m_WrapMode: 0
   m_Bounds:
     m_Center: {x: 0, y: 0, z: 0}
     m_Extent: {x: 0, y: 0, z: 0}
+  m_MuscleClipInfo:
+    m_StartTime: 0
+    m_StopTime: 0
+    m_OrientationOffsetY: 0
+    m_Level: 0
+    m_CycleOffset: 0
+    m_LoopBlend: 0
+    m_LoopBlendOrientation: 0
+    m_LoopBlendPositionY: 0
+    m_LoopBlendPositionXZ: 0
+    m_KeepOriginalOrientation: 0
+    m_KeepOriginalPositionY: 0
+    m_KeepOriginalPositionXZ: 0
+    m_HeightFromFeet: 0
+    m_Mirror: 0
+    m_KeepAdditionalBonesAnimation: 0
   m_EditorCurves: []
   m_EulerEditorCurves: []
   m_Events:
   - time: 0.016666668
-    functionName: PlaySoundEvent
-    data: Collected
+    functionName: PlaySoundEventFromTaggedAnim
+    data: ItemPickup
     objectReferenceParameter: {fileID: 0}
     floatParameter: 0
     intParameter: 0
@@ -68,7 +64,7 @@ AnimationClip:
   - time: 0.5
     functionName: SpawnEffectPrefab
     data: Visuals
-    objectReferenceParameter: {fileID: 1078799044913432, guid: 55ec020e625fdb744ae221aae3fa2ae9, type: 2}
+    objectReferenceParameter: {fileID: 1469293916656253, guid: 67aeaa6f81962734aaa830c0d394e37b, type: 2}
     floatParameter: 0
     intParameter: 0
     messageOptions: 0

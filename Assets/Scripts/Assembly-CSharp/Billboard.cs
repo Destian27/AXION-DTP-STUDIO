@@ -9,14 +9,17 @@ public class Billboard : MonoBehaviour
 	private void Start()
 	{
 		myTransform = base.transform;
-		cameraTransform = Camera.main.transform;
+		if (WeakGlobalMonoBehavior<InGameImpl>.Exists)
+		{
+			cameraTransform = WeakGlobalMonoBehavior<InGameImpl>.Instance.gameCamera.transform;
+		}
 	}
 
 	private void LateUpdate()
 	{
-		if (cameraTransform == null)
+		if (cameraTransform == null && WeakGlobalMonoBehavior<InGameImpl>.Exists)
 		{
-			cameraTransform = Camera.main.transform;
+			cameraTransform = WeakGlobalMonoBehavior<InGameImpl>.Instance.gameCamera.transform;
 		}
 		myTransform.LookAt(myTransform.position + cameraTransform.rotation * new Vector3(0f, 0f, 1f));
 	}

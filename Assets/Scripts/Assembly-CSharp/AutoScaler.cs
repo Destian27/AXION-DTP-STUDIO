@@ -75,14 +75,7 @@ public class AutoScaler
 	{
 		mGameResolution = nativeRez;
 		mAspectRatioModifier = nativeRez.y / nativeRez.x / ((float)Screen.height / (float)Screen.width);
-		int num = Screen.width;
-		int num2 = Screen.height;
-		if (num < num2)
-		{
-			num = Screen.height;
-			num2 = Screen.width;
-		}
-		mCoordinateScale = new Vector2((float)num / mGameResolution.x, (float)num2 / mGameResolution.y);
+		mCoordinateScale = new Vector2((float)Screen.width / mGameResolution.x, (float)Screen.height / mGameResolution.y);
 		if (mCoordinateScale.x < mCoordinateScale.y)
 		{
 			mSizeScale = mCoordinateScale.x;

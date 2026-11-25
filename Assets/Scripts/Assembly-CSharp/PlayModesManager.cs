@@ -1,5 +1,5 @@
+using System;
 using System.Collections.Generic;
-using Debug = UnityEngine.Debug;
 
 public class PlayModesManager : Singleton<PlayModesManager>
 {
@@ -11,13 +11,21 @@ public class PlayModesManager : Singleton<PlayModesManager>
 
 	private string mModeID;
 
-	private SDFTreeNode mData;
+	private PlayModeSchema[] mData;
 
-	private SDFTreeNode mSelectedModeData;
+	private PlayModeSchema mSelectedModeData;
 
 	private List<KeyValuePair<string, string>> mPathSubstitutions = new List<KeyValuePair<string, string>>();
 
 	private GameDirection mGameDirection;
+
+	public static string UdamanTableName
+	{
+		get
+		{
+			return "PlayModes";
+		}
+	}
 
 	public string selectedMode
 	{
@@ -31,13 +39,12 @@ public class PlayModesManager : Singleton<PlayModesManager>
 			{
 				mModeID = value;
 				ReloadData();
-				Singleton<Profile>.instance.PostLoadSyncing();
-				SingletonMonoBehaviour<ResourcesManager>.instance.BroadcastCacheReload();
+				Singleton<Profile>.Instance.PostLoadSyncing();
 			}
 		}
 	}
 
-	public SDFTreeNode selectedModeData
+	public PlayModeSchema selectedModeData
 	{
 		get
 		{
@@ -45,11 +52,11 @@ public class PlayModesManager : Singleton<PlayModesManager>
 		}
 	}
 
-	public SDFChildEnumerator allModes
+	public PlayModeSchema[] allModes
 	{
 		get
 		{
-			return mData.childs;
+			return mData;
 		}
 	}
 
@@ -57,7 +64,7 @@ public class PlayModesManager : Singleton<PlayModesManager>
 	{
 		get
 		{
-			return mSelectedModeData["revivePotionID"];
+			return mSelectedModeData.revivePotion.Key;
 		}
 	}
 
@@ -69,16 +76,17 @@ public class PlayModesManager : Singleton<PlayModesManager>
 		}
 	}
 
+	public bool Attacking { get; set; }
+
 	public PlayModesManager()
 	{
 		mModeID = "classic";
 		ReloadData();
-		SingletonMonoBehaviour<ResourcesManager>.instance.onInvalidateCache += ReloadData;
 	}
 
-	public SDFTreeNode GetModeData(string id)
+	public PlayModeSchema GetModeData(string id)
 	{
-		return mData.to(id);
+		return Array.Find(mData, (PlayModeSchema m) => m.id.Key == id);
 	}
 
 	public string ApplyPathSubstitutions(string path)
@@ -93,56 +101,40 @@ public class PlayModesManager : Singleton<PlayModesManager>
 		return path;
 	}
 
-	public bool CheckFlag(string flagID)
-	{
-		string text = mSelectedModeData[flagID];
-		if (text == null || text == string.Empty)
-		{
-			return false;
-		}
-		return SUILayoutConv.GetBool(text);
-	}
-
 	private void ReloadData()
 	{
-		mData = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/PlayModes", false);
-		mSelectedModeData = mData.to(mModeID);
-		if (mSelectedModeData == null)
+		if (DataBundleRuntime.Instance != null && DataBundleRuntime.Instance.Initialized)
 		{
-			Debug.Log("WARNING: Unknown play mode: " + mModeID);
-			mSelectedModeData = new SDFTreeNode();
+			mData = DataBundleUtils.InitializeRecords<PlayModeSchema>(UdamanTableName);
+			PlayModeSchema[] array = mData;
+			foreach (PlayModeSchema playModeSchema in array)
+			{
+				playModeSchema.Initialize(UdamanTableName);
+			}
+			mSelectedModeData = GetModeData(mModeID);
+			if (mSelectedModeData == null)
+			{
+				mSelectedModeData = mData[0];
+			}
+			InitPathSubstitutions();
+			DetermineGameDirection();
 		}
-		InitPathSubstitutions();
-		DetermineGameDirection();
 	}
 
 	private void InitPathSubstitutions()
 	{
 		mPathSubstitutions.Clear();
-		if (!mSelectedModeData.hasChild("pathSubstitutions"))
-		{
-			return;
-		}
-		foreach (KeyValuePair<string, string> attribute in mSelectedModeData.to("pathSubstitutions").attributes)
-		{
-			string[] array = attribute.Value.Split(':');
-			if (array.Length != 2)
-			{
-				Debug.Log("WARNING: wrong path substitution: " + attribute.Value);
-				continue;
-			}
-			KeyValuePair<string, string> item = new KeyValuePair<string, string>(array[0].Trim(), array[1].Trim());
-			mPathSubstitutions.Add(item);
-		}
 	}
 
-	private void DetermineGameDirection()
+	public void DetermineGameDirection()
 	{
-		mGameDirection = GameDirection.LeftToRight;
-		string strA = mSelectedModeData["gameDirection"];
-		if (string.Compare(strA, "RightToLeft", true) == 0)
+		if (Singleton<Profile>.Instance.inVSMultiplayerWave && Attacking)
 		{
 			mGameDirection = GameDirection.RightToLeft;
+		}
+		else
+		{
+			mGameDirection = (mSelectedModeData.rightToLeft ? GameDirection.RightToLeft : GameDirection.LeftToRight);
 		}
 	}
 }

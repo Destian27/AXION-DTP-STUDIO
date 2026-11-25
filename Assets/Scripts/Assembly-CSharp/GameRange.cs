@@ -33,4 +33,11 @@ public class GameRange
 		}
 		return result;
 	}
+
+	public void PivotAboutLeft()
+	{
+		float num = right - left;
+		right = left;
+		left = right - num;
+	}
 }

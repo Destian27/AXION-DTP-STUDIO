@@ -1,29 +1,42 @@
 using System;
 using UnityEngine;
 
-public class SingletonMonoBehaviour<T> : MonoBehaviour where T : Component
+public class SingletonMonoBehaviour<T> : MonoBehaviour where T : SingletonMonoBehaviour<T>
 {
-	private static T mUniqueInstance;
+	private static SingletonMonoBehaviour<T> uniqueInstance;
 
-	public static T instance
+	public static T Instance
 	{
 		get
 		{
-			if ((UnityEngine.Object)mUniqueInstance == (UnityEngine.Object)null)
+			if (!Exists)
 			{
-				GameObject gameObject = new GameObject("SingletonMonoBehaviour", typeof(T));
-				mUniqueInstance = gameObject.GetComponent<T>();
-				UnityEngine.Object.DontDestroyOnLoad(gameObject);
 			}
-			return mUniqueInstance;
+			return (T)uniqueInstance;
 		}
 	}
 
-	public SingletonMonoBehaviour()
+	public static bool Exists { get; private set; }
+
+	protected virtual void Awake()
 	{
-		if ((UnityEngine.Object)mUniqueInstance != (UnityEngine.Object)null)
+		if (uniqueInstance == null)
 		{
-			throw new InvalidOperationException("Cannot manually instantiate a Singleton<> class.");
+			uniqueInstance = this;
+			Exists = true;
+		}
+		else if (uniqueInstance != this)
+		{
+			throw new InvalidOperationException("Cannot have two instances of a SingletonMonoBehaviour : " + typeof(T).ToString() + ".");
+		}
+	}
+
+	protected virtual void OnDestroy()
+	{
+		if (uniqueInstance == this)
+		{
+			Exists = false;
+			uniqueInstance = null;
 		}
 	}
 }

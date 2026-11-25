@@ -22,6 +22,13 @@ public class AnimationEffects : MonoBehaviour
 
 	private AutoPaperdoll mAutoPaperdoll;
 
+	private void Awake()
+	{
+		mHiddenBodyParts = null;
+		mAnimEndedFunctions = null;
+		mAutoPaperdoll = null;
+	}
+
 	private void Start()
 	{
 		mAutoPaperdoll = GetComponent<AutoPaperdoll>();
@@ -98,57 +105,82 @@ public class AnimationEffects : MonoBehaviour
 		}
 	}
 
-	public void SpawnEffectPrefab(AnimationEvent theAnimEvent)
+	private GameObject SpawnEffectHelper(AnimationEvent theAnimEvent, bool keepAttached, bool ignoreRotation)
 	{
 		GameObject gameObject = theAnimEvent.objectReferenceParameter as GameObject;
 		if (!gameObject)
 		{
-			Debug.LogWarning("Must specify a Prefab to spawn for SpawnEffectPrefab animation event");
-			return;
+			return null;
 		}
-		GameObject gameObject2 = mAutoPaperdoll.InstantiateObjectOnJoint(gameObject, theAnimEvent.stringParameter, false, false);
-		if (gameObject2 != null)
+		GameObject gameObject2 = GameObjectPool.DefaultObjectPool.Acquire(gameObject);
+		string stringParameter = theAnimEvent.stringParameter;
+		if (stringParameter != null)
 		{
-			gameObject2.SendMessage("SpawnedFrom", base.gameObject, SendMessageOptions.DontRequireReceiver);
+			mAutoPaperdoll.ApplyObjectToJoint(gameObject2, null, stringParameter, keepAttached, false, ignoreRotation);
+		}
+		internal_killEffect(gameObject2);
+		return gameObject2;
+	}
+
+	public void SpawnEffectPrefab(AnimationEvent theAnimEvent)
+	{
+		if (WeakGlobalMonoBehavior<InGameImpl>.Exists)
+		{
+			GameObject gameObject = SpawnEffectHelper(theAnimEvent, false, true);
+			if (gameObject != null)
+			{
+				gameObject.SendMessage("SpawnedFrom", base.gameObject, SendMessageOptions.DontRequireReceiver);
+			}
 		}
 	}
 
 	public void SpawnEffectPrefabIgnoreRotation(AnimationEvent theAnimEvent)
 	{
-		GameObject gameObject = theAnimEvent.objectReferenceParameter as GameObject;
-		if (!gameObject)
+		if (WeakGlobalMonoBehavior<InGameImpl>.Exists)
 		{
-			Debug.LogWarning("Must specify a Prefab to spawn for SpawnEffectPrefab animation event");
-			return;
+			GameObject gameObject = SpawnEffectHelper(theAnimEvent, false, false);
+			if (gameObject != null)
+			{
+				gameObject.SendMessage("SpawnedFrom", base.gameObject, SendMessageOptions.DontRequireReceiver);
+			}
 		}
-		GameObject gameObject2 = UnityEngine.Object.Instantiate(gameObject, mAutoPaperdoll.GetJointPosition(theAnimEvent.stringParameter), Quaternion.identity) as GameObject;
-		if (gameObject2 != null)
+	}
+
+	public void AttachTargetToJoint(AnimationEvent theAnimEvent)
+	{
+		CharacterModelController component = base.gameObject.GetComponent<CharacterModelController>();
+		if (component != null && component.target != null)
 		{
-			gameObject2.SendMessage("SpawnedFrom", base.gameObject, SendMessageOptions.DontRequireReceiver);
+			AutoPaperdoll.LabeledJoint jointData = mAutoPaperdoll.GetJointData(theAnimEvent.stringParameter);
+			component.AttachCharacterToJoint(component.target, jointData);
+		}
+	}
+
+	public void ShrinkTargetOverTime(AnimationEvent theAnimEvent)
+	{
+		CharacterModelController component = base.gameObject.GetComponent<CharacterModelController>();
+		if (component != null)
+		{
+			component.target.SetScaleOverTime(0f, theAnimEvent.floatParameter);
 		}
 	}
 
 	public void AttachEffectPrefabToJoint(AnimationEvent theAnimEvent)
 	{
-		GameObject gameObject = theAnimEvent.objectReferenceParameter as GameObject;
-		if (!gameObject)
+		if (WeakGlobalMonoBehavior<InGameImpl>.Exists)
 		{
-			Debug.LogWarning("Must specify a Prefab to spawn for AttachEffectPrefabToJoint animation event");
-			return;
-		}
-		GameObject gameObject2 = mAutoPaperdoll.InstantiateObjectOnJoint(gameObject, theAnimEvent.stringParameter, true, false);
-		if (gameObject2 != null)
-		{
-			gameObject2.SendMessage("SpawnedFrom", base.gameObject, SendMessageOptions.DontRequireReceiver);
+			GameObject gameObject = SpawnEffectHelper(theAnimEvent, true, true);
+			if (gameObject != null)
+			{
+				gameObject.SendMessage("SpawnedFrom", base.gameObject, SendMessageOptions.DontRequireReceiver);
+			}
 		}
 	}
 
 	public void AttachEffectPrefabToJointThisAnimOnly(AnimationEvent theAnimEvent)
 	{
-		GameObject gameObject = theAnimEvent.objectReferenceParameter as GameObject;
-		if (!gameObject)
+		if (!WeakGlobalMonoBehavior<InGameImpl>.Exists)
 		{
-			Debug.LogWarning("Must specify a Prefab to spawn for AttachEffectPrefabToJoint animation event");
 			return;
 		}
 		AutoPaperdoll.LabeledJoint jointData = mAutoPaperdoll.GetJointData(theAnimEvent.stringParameter);
@@ -156,13 +188,13 @@ public class AnimationEffects : MonoBehaviour
 		{
 			for (int i = 0; i < jointData.joint.childCount; i++)
 			{
-				if (jointData.joint.GetChild(i).name == gameObject.name + "(Clone)")
+				if (jointData.joint.GetChild(i).name.StartsWith(theAnimEvent.objectReferenceParameter.name))
 				{
 					return;
 				}
 			}
 		}
-		GameObject newObject = mAutoPaperdoll.InstantiateObjectOnJoint(gameObject, theAnimEvent.stringParameter, true, false);
+		GameObject newObject = SpawnEffectHelper(theAnimEvent, true, true);
 		if (newObject != null)
 		{
 			newObject.SendMessage("SpawnedFrom", base.gameObject, SendMessageOptions.DontRequireReceiver);
@@ -170,7 +202,7 @@ public class AnimationEffects : MonoBehaviour
 			animEndedFunc.parentState = theAnimEvent.animationState;
 			animEndedFunc.funcToCall = delegate
 			{
-				internal_killEffect(newObject);
+				GameObjectPool.DefaultObjectPool.Release(newObject);
 			};
 			if (mAnimEndedFunctions == null)
 			{
@@ -193,7 +225,7 @@ public class AnimationEffects : MonoBehaviour
 
 	public void DeleteThisGameObject()
 	{
-		UnityEngine.Object.Destroy(base.gameObject);
+		GameObjectPool.DefaultObjectPool.Release(base.gameObject);
 	}
 
 	public void StopAllParticleEmitters()
@@ -205,6 +237,15 @@ public class AnimationEffects : MonoBehaviour
 			if (particleEmitter != null)
 			{
 				particleEmitter.emit = false;
+			}
+		}
+		ParticleSystem[] componentsInChildren2 = GetComponentsInChildren<ParticleSystem>();
+		ParticleSystem[] array2 = componentsInChildren2;
+		foreach (ParticleSystem particleSystem in array2)
+		{
+			if (particleSystem != null)
+			{
+				particleSystem.Stop();
 			}
 		}
 	}
@@ -251,12 +292,6 @@ public class AnimationEffects : MonoBehaviour
 
 	private void internal_killEffect(GameObject effect)
 	{
-		if (!(effect == null))
-		{
-			EffectKiller effectKiller = effect.AddComponent<EffectKiller>();
-			effectKiller.autoDeleteAfterTime = float.Epsilon;
-			effectKiller.deleteWhenAllChildrenDead = true;
-			effectKiller.letParticlesFinishForTimedDelete = true;
-		}
+		EffectKiller.AddKiller(effect, GameObjectPool.DefaultObjectPool);
 	}
 }

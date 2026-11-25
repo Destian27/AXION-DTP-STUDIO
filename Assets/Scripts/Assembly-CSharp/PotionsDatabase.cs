@@ -1,19 +1,59 @@
 using System.Collections.Generic;
-using Debug = UnityEngine.Debug;
 
 public class PotionsDatabase : Singleton<PotionsDatabase>
 {
-	private SDFTreeNode mData;
+	private Dictionary<string, DataBundleRecordHandle<PotionSchema>> mData = new Dictionary<string, DataBundleRecordHandle<PotionSchema>>();
 
-	private Dictionary<string, string[]> mAllIDs = new Dictionary<string, string[]>();
+	private Dictionary<string, List<string>> mAllIDs = new Dictionary<string, List<string>>();
 
-	public List<string> allIDs;
-
-	public string[] allIDsForActivePlayMode
+	public static string UdamanTableName
 	{
 		get
 		{
-			return GetIDsForPlayMode(Singleton<PlayModesManager>.instance.selectedMode);
+			return "Potions";
+		}
+	}
+
+	public List<string> allIDsForActivePlayMode
+	{
+		get
+		{
+			return GetIDsForPlayMode(Singleton<PlayModesManager>.Instance.selectedMode);
+		}
+	}
+
+	public PotionSchema this[string id]
+	{
+		get
+		{
+			DataBundleRecordHandle<PotionSchema> value;
+			mData.TryGetValue(id, out value);
+			return (value == null) ? null : value.Data;
+		}
+	}
+
+	public IEnumerable<DataBundleRecordHandle<PotionSchema>> AllPotions
+	{
+		get
+		{
+			return mData.Values;
+		}
+	}
+
+	public IEnumerable<PotionSchema> AllPotionsForActivePlayMode
+	{
+		get
+		{
+			List<string> list = allIDsForActivePlayMode;
+			List<PotionSchema> list2 = new List<PotionSchema>();
+			foreach (DataBundleRecordHandle<PotionSchema> value in mData.Values)
+			{
+				if (list.Contains(value.Data.id))
+				{
+					list2.Add(value.Data);
+				}
+			}
+			return list2;
 		}
 	}
 
@@ -21,28 +61,41 @@ public class PotionsDatabase : Singleton<PotionsDatabase>
 	{
 		ResetCachedData();
 		CacheSimpleIDList();
-		SingletonMonoBehaviour<ResourcesManager>.instance.onInvalidateCache += ResetCachedData;
 	}
 
 	public void ResetCachedData()
 	{
-		mData = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Potions");
+		mData.Clear();
+		if (DataBundleRuntime.Instance == null || !DataBundleRuntime.Instance.Initialized)
+		{
+			return;
+		}
+		foreach (string item in DataBundleRuntime.Instance.EnumerateRecordKeys<PotionSchema>(UdamanTableName))
+		{
+			DataBundleRecordHandle<PotionSchema> dataBundleRecordHandle = new DataBundleRecordHandle<PotionSchema>(UdamanTableName, item);
+			dataBundleRecordHandle.Data.Initialize(UdamanTableName);
+			mData.Add(dataBundleRecordHandle.Data.id, dataBundleRecordHandle);
+		}
 		CacheSimpleIDList();
 	}
 
-	public string[] GetIDsForPlayMode(string playmode)
+	public List<string> GetIDsForPlayMode(string playmode)
 	{
-		return mAllIDs[playmode];
+		List<string> value;
+		if (mAllIDs.TryGetValue(playmode, out value))
+		{
+			return value;
+		}
+		return null;
 	}
 
 	public bool Contains(string id)
 	{
-		foreach (KeyValuePair<string, string[]> mAllID in mAllIDs)
+		foreach (KeyValuePair<string, List<string>> mAllID in mAllIDs)
 		{
-			string[] value = mAllID.Value;
-			foreach (string strA in value)
+			foreach (string item in mAllID.Value)
 			{
-				if (string.Compare(strA, id, true) == 0)
+				if (string.Compare(item, id, true) == 0)
 				{
 					return true;
 				}
@@ -51,110 +104,75 @@ public class PotionsDatabase : Singleton<PotionsDatabase>
 		return false;
 	}
 
-	public string GetAttribute(string potionID, string attributeName)
-	{
-		SDFTreeNode sDFTreeNode = mData.to(potionID);
-		if (sDFTreeNode == null)
-		{
-			return string.Empty;
-		}
-		if (!sDFTreeNode.hasAttribute(attributeName))
-		{
-			return string.Empty;
-		}
-		return Singleton<Localizer>.instance.Parse(sDFTreeNode[attributeName]);
-	}
-
 	public bool Execute(string id)
 	{
-		bool flag = false;
-		SDFTreeNode sDFTreeNode = mData.to(id);
-		if (sDFTreeNode.hasAttribute("heal"))
+		bool result = false;
+		PotionSchema data = mData[id].Data;
+		if (!string.IsNullOrEmpty(data.heal))
 		{
-			flag = Execute_Heal(sDFTreeNode["heal"]);
-			if (flag)
-			{
-				SingletonMonoBehaviour<Achievements>.instance.Award("SAMUZOMBIE_ACHIEVE_WHERES_THE_WASABI");
-				Singleton<Analytics>.instance.LogEvent("HealthPotionUsed", id, Singleton<Profile>.instance.waveToBeat);
-			}
+			result = Execute_Heal(data.heal);
 		}
-		else if (sDFTreeNode.hasAttribute("leadership"))
+		else if (data.leadership > 0f)
 		{
-			flag = Execute_Leadership(sDFTreeNode["leadership"]);
-			if (flag)
-			{
-				SingletonMonoBehaviour<Achievements>.instance.Award("SAMUZOMBIE_ACHIEVE_TEA_EARL_GREY_HOT");
-				Singleton<Analytics>.instance.LogEvent("LeadershipPotionUsed", id, Singleton<Profile>.instance.waveToBeat);
-			}
+			result = Execute_Leadership(data.leadership);
 		}
-		return flag;
+		return result;
+	}
+
+	public void LoadFrontEndData()
+	{
+		foreach (DataBundleRecordHandle<PotionSchema> value in mData.Values)
+		{
+			value.Load(DataBundleResourceGroup.FrontEnd, false, null);
+		}
+	}
+
+	public void LoadInGameData()
+	{
+		foreach (DataBundleRecordHandle<PotionSchema> value in mData.Values)
+		{
+			value.Load(DataBundleResourceGroup.InGame, true, null);
+		}
+	}
+
+	public void UnloadData()
+	{
+		foreach (DataBundleRecordHandle<PotionSchema> value in mData.Values)
+		{
+			value.Unload();
+		}
 	}
 
 	private void CacheSimpleIDList()
 	{
-		SDFTreeNode sDFTreeNode = mData.to("All");
-		List<string> list = new List<string>();
-		for (int i = 0; sDFTreeNode.hasAttribute(i); i++)
-		{
-			list.Add(sDFTreeNode[i]);
-		}
-		allIDs = list;
 		mAllIDs.Clear();
-		foreach (string item in list)
+		foreach (DataBundleRecordHandle<PotionSchema> value2 in mData.Values)
 		{
-			string text = mData.to(item)["playmode"];
-			if (mAllIDs.ContainsKey(text))
+			List<string> value = null;
+			if (!mAllIDs.TryGetValue(value2.Data.playmode.Key, out value))
 			{
-				continue;
+				value = new List<string>();
+				mAllIDs.Add(value2.Data.playmode.Key, value);
 			}
-			int num = 0;
-			foreach (string item2 in list)
-			{
-				if (text == mData.to(item2)["playmode"])
-				{
-					num++;
-				}
-			}
-			int num2 = 0;
-			string[] array = new string[num];
-			foreach (string item3 in list)
-			{
-				if (text == mData.to(item3)["playmode"])
-				{
-					array[num2++] = item3;
-				}
-			}
-			mAllIDs.Add(text, array);
+			value.Add(value2.Data.id);
 		}
 	}
 
 	private bool Execute_Heal(string data)
 	{
+		int num = Singleton<Profile>.Instance.MultiplayerData.CollectionLevel("Sushi");
+		if (num > 0)
+		{
+			data = "all";
+		}
 		switch (data)
 		{
-		default:
-		{
-			int num = 0;
-			if (num == 1)
-			{
-				if (WeakGlobalSceneBehavior<InGameImpl>.instance.hero.health == WeakGlobalSceneBehavior<InGameImpl>.instance.hero.maxHealth)
-				{
-					return false;
-				}
-				WeakGlobalSceneBehavior<InGameImpl>.instance.hero.RecievedHealing(WeakGlobalSceneBehavior<InGameImpl>.instance.hero.maxHealth);
-			}
-			else
-			{
-				Debug.Log("ERROR: Unknown healing potion command: " + data);
-			}
-			break;
-		}
 		case "all":
 		{
 			bool flag = false;
-			foreach (Character item in WeakGlobalInstance<CharactersManager>.instance.allAlive)
+			foreach (Character item in WeakGlobalInstance<CharactersManager>.Instance.allAlive)
 			{
-				if (!item.isEnemy && !item.isBase && item.health < item.maxHealth)
+				if (item.ownerId == 0 && !item.isBase && (item.health < item.maxHealth || item.mountedHealth < item.mountedHealthMax))
 				{
 					flag = true;
 					break;
@@ -162,37 +180,51 @@ public class PotionsDatabase : Singleton<PotionsDatabase>
 			}
 			if (flag)
 			{
-				foreach (Character item2 in WeakGlobalInstance<CharactersManager>.instance.allAlive)
+				foreach (Character item2 in WeakGlobalInstance<CharactersManager>.Instance.allAlive)
 				{
-					if (!item2.isEnemy && !item2.isBase && item2.health < item2.maxHealth)
+					if (item2.ownerId == 0 && !item2.isBase)
 					{
-						item2.RecievedHealing(item2.maxHealth - item2.health);
+						if (item2.health < item2.maxHealth)
+						{
+							item2.RecievedHealing(item2.maxHealth - item2.health);
+						}
+						if (item2.mountedHealth < item2.mountedHealthMax)
+						{
+							item2.RecievedHealing(item2.mountedHealthMax - item2.mountedHealth);
+						}
 					}
 				}
 				break;
 			}
 			return false;
 		}
+		case "hero":
+			if (WeakGlobalMonoBehavior<InGameImpl>.Instance.hero.health == WeakGlobalMonoBehavior<InGameImpl>.Instance.hero.maxHealth && WeakGlobalMonoBehavior<InGameImpl>.Instance.hero.mountedHealth >= WeakGlobalMonoBehavior<InGameImpl>.Instance.hero.mountedHealthMax)
+			{
+				return false;
+			}
+			WeakGlobalMonoBehavior<InGameImpl>.Instance.hero.RecievedHealing(WeakGlobalMonoBehavior<InGameImpl>.Instance.hero.maxHealth);
+			break;
 		}
 		return true;
 	}
 
-	private bool Execute_Leadership(string data)
+	private bool Execute_Leadership(float value)
 	{
-		int num = 0;
-		try
-		{
-			num = int.Parse(data);
-		}
-		catch
+		if (WeakGlobalInstance<Leadership>.Instance.resources == WeakGlobalInstance<Leadership>.Instance.maxResources)
 		{
 			return false;
 		}
-		if (WeakGlobalInstance<Smithy>.instance.resources == WeakGlobalInstance<Smithy>.instance.maxResources)
+		int num = Singleton<Profile>.Instance.MultiplayerData.CollectionLevel("Tea");
+		if (num > 0)
 		{
-			return false;
+			WeakGlobalInstance<Leadership>.Instance.resources = WeakGlobalInstance<Leadership>.Instance.maxResources;
 		}
-		WeakGlobalInstance<Smithy>.instance.resources += num;
+		else
+		{
+			int num2 = (int)value;
+			WeakGlobalInstance<Leadership>.Instance.resources += num2;
+		}
 		return true;
 	}
 }

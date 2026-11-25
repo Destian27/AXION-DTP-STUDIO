@@ -2,7 +2,9 @@ using UnityEngine;
 
 public class TowerArcher : Character
 {
-	public TowerArcher(string model, Vector3 pos, string weaponPropLocation, Projectile.EProjectileType projectileType, float damage, float range, float attackFrequency, bool againstPlayer)
+	private DataBundleRecordHandle<CharacterSchema> resources;
+
+	public TowerArcher(string characterRecordName, Vector3 pos, GameObject weaponProp, string projectileType, float damage, float range, float attackFrequency, bool againstPlayer)
 	{
 		CharacterStats characterStats = new CharacterStats
 		{
@@ -11,36 +13,73 @@ public class TowerArcher : Character
 			bowAttackFrequency = attackFrequency,
 			bowAttackDamage = damage,
 			bowAttackRange = range,
-			meleeAttackRange = 150f,
+			meleeAttackRange = 1.5f,
 			projectile = projectileType,
 			isEnemy = againstPlayer
 		};
-		base.controlledObject = (GameObject)Object.Instantiate(Resources.Load(model));
+		InitializeModel(characterRecordName);
 		base.controller.position = pos;
 		base.controller.facing = FacingType.Right;
+		base.controller.snapToGround = false;
 		base.stats = characterStats;
-		if (weaponPropLocation != null)
+		base.ownerId = 0;
+		if (Singleton<Profile>.Instance.inVSMultiplayerWave && Singleton<PlayModesManager>.Instance.Attacking)
 		{
-			base.rangedWeaponPrefab = Resources.Load(weaponPropLocation) as GameObject;
+			base.ownerId = 1;
+		}
+		if (weaponProp != null)
+		{
+			base.rangedWeaponPrefab = weaponProp;
 		}
 		SetRangeAttackMode(true);
 	}
 
+	private void InitializeModel(string characterRecordName)
+	{
+		resources = new DataBundleRecordHandle<CharacterSchema>(characterRecordName);
+		resources.Load(DataBundleResourceGroup.InGame, true, delegate(CharacterSchema schema)
+		{
+			schema.Initialize("Character");
+			base.controlledObject = CharacterSchema.Deserialize(schema);
+		});
+	}
+
 	public override void Update()
 	{
-		base.Update();
-		if (base.health != 0f && base.isEffectivelyIdle)
+		if (base.controlledObject == null)
 		{
-			if (WeakGlobalSceneBehavior<InGameImpl>.instance.playerWon && !base.isEnemy)
+			return;
+		}
+		base.Update();
+		if (base.health == 0f || !base.isEffectivelyIdle)
+		{
+			return;
+		}
+		if (WeakGlobalMonoBehavior<InGameImpl>.Instance.gameOver)
+		{
+			if (WeakGlobalMonoBehavior<InGameImpl>.Instance.playerWon != Singleton<PlayModesManager>.Instance.Attacking)
 			{
 				base.controller.PlayVictoryAnim();
 			}
-			else if (base.canUseRangedAttack && IsInBowRangeOfOpponent())
+			else if (Singleton<Profile>.Instance.inVSMultiplayerWave)
 			{
-				StartRangedAttackDelayTimer();
-				base.singleAttackTarget = WeakGlobalInstance<CharactersManager>.instance.GetBestRangedAttackTarget(this, base.bowAttackGameRange);
-				base.controller.RangeAttack(base.bowAttackFrequency);
+				base.controller.Die();
 			}
 		}
+		else if (base.canUseRangedAttack && IsInBowRangeOfOpponent())
+		{
+			StartRangedAttackDelayTimer();
+			base.singleAttackTarget = WeakGlobalInstance<CharactersManager>.Instance.GetBestRangedAttackTarget(this, base.bowAttackGameRange);
+			base.controller.RangeAttack(base.bowAttackFrequency);
+		}
+	}
+
+	public void UnloadData()
+	{
+		resources.Unload();
+	}
+
+	public override void RecievedAttack(EAttackType attackType, float damage, Character attacker, bool canReflect)
+	{
 	}
 }

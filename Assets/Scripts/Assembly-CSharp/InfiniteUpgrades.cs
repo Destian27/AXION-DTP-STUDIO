@@ -1,5 +1,4 @@
 using System;
-using Debug = UnityEngine.Debug;
 
 public class InfiniteUpgrades
 {
@@ -7,7 +6,6 @@ public class InfiniteUpgrades
 	{
 		if (level < 1)
 		{
-			Debug.Log("WARNING: No level data found.");
 			return default(T);
 		}
 		if (root.hasChild(level))
@@ -20,7 +18,6 @@ public class InfiniteUpgrades
 		}
 		if (i >= level)
 		{
-			Debug.Log("WARNING: Malformed level data encountered.");
 			return default(T);
 		}
 		float num = Parse<float>(root[upgradeFactorAttribute]) * (float)(level - i);
@@ -29,11 +26,15 @@ public class InfiniteUpgrades
 		return (T)Convert.ChangeType(num2, typeof(T));
 	}
 
+	public static float Extrapolate(float finalValue, float upgradeFactor, int levelDelta)
+	{
+		return finalValue + finalValue * (upgradeFactor * (float)levelDelta);
+	}
+
 	public static T SnapToHighest<T>(SDFTreeNode root, string attributeName, int level)
 	{
 		if (level < 1)
 		{
-			Debug.Log("WARNING: No level data found.");
 			return default(T);
 		}
 		if (root.hasChild(level))

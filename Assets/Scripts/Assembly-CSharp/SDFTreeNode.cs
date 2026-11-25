@@ -14,7 +14,18 @@ public class SDFTreeNode
 		{
 			try
 			{
-				return mAttributes[attribName.ToLower()];
+				int num = attribName.IndexOf('/');
+				if (num < 0)
+				{
+					return mAttributes[key(attribName)];
+				}
+				string path = attribName.Substring(0, num);
+				string attribName2 = attribName.Substring(num + 1);
+				SDFTreeNode sDFTreeNode = to(path);
+				if (sDFTreeNode != null)
+				{
+					return sDFTreeNode[attribName2];
+				}
 			}
 			catch
 			{
@@ -23,14 +34,30 @@ public class SDFTreeNode
 		}
 		set
 		{
-			attribName = attribName.ToLower();
-			if (mAttributes.ContainsKey(attribName))
+			int num = attribName.IndexOf('/');
+			if (num >= 0)
 			{
-				mAttributes[attribName] = value;
+				string path = attribName.Substring(0, num);
+				string attribName2 = attribName.Substring(num + 1);
+				SDFTreeNode sDFTreeNode = to(path);
+				if (sDFTreeNode == null)
+				{
+					sDFTreeNode = new SDFTreeNode();
+					mChilds.Add(path, sDFTreeNode);
+				}
+				sDFTreeNode[attribName2] = value;
 			}
 			else
 			{
-				mAttributes.Add(attribName, value);
+				attribName = key(attribName);
+				if (mAttributes.ContainsKey(attribName))
+				{
+					mAttributes[attribName] = value;
+				}
+				else
+				{
+					mAttributes.Add(attribName, value);
+				}
 			}
 		}
 	}
@@ -79,9 +106,14 @@ public class SDFTreeNode
 		}
 	}
 
+	private static string key(string k)
+	{
+		return k.ToLower();
+	}
+
 	public bool hasChild(string childName)
 	{
-		return mChilds.ContainsKey(childName.ToLower());
+		return mChilds.ContainsKey(key(childName));
 	}
 
 	public bool hasChild(int val)
@@ -91,7 +123,7 @@ public class SDFTreeNode
 
 	public bool hasAttribute(string attributeName)
 	{
-		return mAttributes.ContainsKey(attributeName.ToLower());
+		return mAttributes.ContainsKey(key(attributeName));
 	}
 
 	public bool hasAttribute(int listIndex)
@@ -110,7 +142,7 @@ public class SDFTreeNode
 		{
 			return null;
 		}
-		path = path.Trim().ToLower();
+		path = key(path.Trim());
 		if (path.Length == 0)
 		{
 			return null;
@@ -120,7 +152,7 @@ public class SDFTreeNode
 
 	public void SetChild(string childName, SDFTreeNode node)
 	{
-		childName = childName.ToLower();
+		childName = key(childName);
 		if (mChilds.ContainsKey(childName))
 		{
 			mChilds[childName] = node;
@@ -169,7 +201,7 @@ public class SDFTreeNode
 		}
 		foreach (string mFileLink in mFileLinks)
 		{
-			SDFTreeNode sDFTreeNode = SingletonMonoBehaviour<ResourcesManager>.instance.Open(mFileLink);
+			SDFTreeNode sDFTreeNode = SDFTree.LoadFromResources(mFileLink);
 			if (sDFTreeNode != null)
 			{
 				MergeFrom(sDFTreeNode);

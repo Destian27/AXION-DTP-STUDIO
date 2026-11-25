@@ -1,6 +1,5 @@
-using System;
 using System.Collections.Generic;
-using Debug = UnityEngine.Debug;
+using UnityEngine;
 
 public class VillageArchers
 {
@@ -8,43 +7,43 @@ public class VillageArchers
 
 	private const float kTimerTriggerDamages = 3.2f;
 
-	private int mNumArchers = 1;
+	private const int kNumArchers = 2;
 
-	private string mBowPrefabPath;
+	private string[] mArcherCharacterRecordName = new string[2];
 
-	private string mArcherPrefabPath;
+	private string[] mArrowType = new string[2];
+
+	private GameObject[] mRangedWeaponPrefab = new GameObject[2];
+
+	private float[] mRange = new float[2];
+
+	private float[] mDamage = new float[2];
+
+	private float[] mAttackSpeed = new float[2];
 
 	private List<TowerArcher> mArcherList = new List<TowerArcher>();
 
 	private int mArcherLevel;
 
-	private float mRange;
-
-	private float mDamage;
-
-	private float mAttackSpeed;
-
 	private bool mAgainstPlayer;
-
-	private Projectile.EProjectileType mArrowType = Projectile.EProjectileType.Arrow;
 
 	public VillageArchers()
 	{
-		switch (Singleton<PlayModesManager>.instance.selectedMode)
+		mArcherLevel = Singleton<Profile>.Instance.archerLevel;
+		if (Singleton<Profile>.Instance.inVSMultiplayerWave && Singleton<PlayModesManager>.Instance.Attacking)
 		{
-		case "classic":
-			mArcherLevel = Singleton<Profile>.instance.archerLevel;
-			break;
-		case "zombies":
-			mArcherLevel = WeakGlobalInstance<WaveManager>.instance.villageArchersLevel;
-			break;
+			mArcherLevel = Singleton<Profile>.Instance.MultiplayerData.CurrentOpponent.loadout.archerLevel;
 		}
-		if (mArcherLevel != 0)
+		if (mArcherLevel == 0)
 		{
-			GetVillageArcherStats();
-			for (int i = 0; i < mNumArchers; i++)
+			return;
+		}
+		GetVillageArcherStats();
+		for (int i = 0; i < 2; i++)
+		{
+			if (!string.IsNullOrEmpty(mArcherCharacterRecordName[i]))
 			{
-				mArcherList.Add(new TowerArcher(mArcherPrefabPath, WeakGlobalSceneBehavior<InGameImpl>.instance.villageArcher[i].position, mBowPrefabPath, mArrowType, mDamage, mRange, mAttackSpeed, mAgainstPlayer));
+				mArcherList.Add(new TowerArcher(mArcherCharacterRecordName[i], WeakGlobalMonoBehavior<InGameImpl>.Instance.villageArcher[i].position, mRangedWeaponPrefab[i], mArrowType[i], mDamage[i], mRange[i], mAttackSpeed[i], mAgainstPlayer));
 			}
 		}
 	}
@@ -61,22 +60,35 @@ public class VillageArchers
 		}
 	}
 
-	private void GetVillageArcherStats()
+	public void UnloadData()
 	{
-		SDFTreeNode sDFTreeNode = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/VillageArchers");
-		SDFTreeNode sDFTreeNode2 = sDFTreeNode.to(string.Format("{0:000}", mArcherLevel));
-		if (sDFTreeNode2 == null)
+		if (mArcherList == null)
 		{
-			Debug.Log("ERROR: Unable to find proper village archers stats for level " + mArcherLevel);
 			return;
 		}
-		mRange = float.Parse(sDFTreeNode2["bowRange"]);
-		mDamage = float.Parse(sDFTreeNode2["bowDamage"]);
-		mArcherPrefabPath = sDFTreeNode["archerPrefab"];
-		mNumArchers = int.Parse(sDFTreeNode2["numberOfArchers"]);
-		mBowPrefabPath = sDFTreeNode["weaponRangedPrefab"];
-		mAttackSpeed = float.Parse(sDFTreeNode2["attackFrequency"]);
-		mAgainstPlayer = Singleton<PlayModesManager>.instance.selectedMode != "classic";
-		mArrowType = (Projectile.EProjectileType)(int)Enum.Parse(typeof(Projectile.EProjectileType), sDFTreeNode2["projectile"]);
+		foreach (TowerArcher mArcher in mArcherList)
+		{
+			mArcher.UnloadData();
+		}
+	}
+
+	private void GetVillageArcherStats()
+	{
+		DataBundleRecordHandle<VillageArcherSchema> dataBundleRecordHandle = new DataBundleRecordHandle<VillageArcherSchema>("VillageArchers", mArcherLevel.ToString());
+		dataBundleRecordHandle.Load(null);
+		VillageArcherSchema data = dataBundleRecordHandle.Data;
+		mRange[0] = data.bowRange_1;
+		mRange[1] = data.bowRange_2;
+		mDamage[0] = data.bowDamage_1;
+		mDamage[1] = data.bowDamage_2;
+		mAttackSpeed[0] = data.attackFrequency_1;
+		mAttackSpeed[1] = data.attackFrequency_2;
+		mArcherCharacterRecordName[0] = data.character_1;
+		mArcherCharacterRecordName[1] = data.character_2;
+		mRangedWeaponPrefab[0] = data.rangedWeaponPrefab_1;
+		mRangedWeaponPrefab[1] = data.rangedWeaponPrefab_2;
+		mArrowType[0] = DataBundleRuntime.RecordKey(data.projectile_1);
+		mArrowType[1] = DataBundleRuntime.RecordKey(data.projectile_2);
+		mAgainstPlayer = !string.IsNullOrEmpty(Singleton<Profile>.Instance.playModeSubSection);
 	}
 }

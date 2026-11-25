@@ -12,17 +12,23 @@ public class CharactersManager : WeakGlobalInstance<CharactersManager>
 		center = 3
 	}
 
-	private const float kCloseDistRange = 45f;
+	private const float kCloseDistRange = 0.45f;
 
 	private const float kMinTimeBetweenAttacks = 0.25f;
 
-	private const float kLaneWidth = 15f;
+	private const float kLaneWidth = 0.15f;
 
 	private const float kLaneCharacterValue = 2500f;
+
+	protected Character[] mMount = new Character[InGameImpl.kMaxPlayers];
 
 	private List<Character> mCharacters = new List<Character>();
 
 	private List<Character> mDyingCharacters = new List<Character>();
+
+	private List<Character> mInactiveCharacters = new List<Character>();
+
+	private List<Character>[] mPlayerCharacters;
 
 	public int helpersCount
 	{
@@ -31,7 +37,7 @@ public class CharactersManager : WeakGlobalInstance<CharactersManager>
 			int num = 0;
 			foreach (Character mCharacter in mCharacters)
 			{
-				if (!mCharacter.isEnemy)
+				if (mCharacter.ownerId == 0 && !mCharacter.isPlayer)
 				{
 					num++;
 				}
@@ -47,7 +53,7 @@ public class CharactersManager : WeakGlobalInstance<CharactersManager>
 			int num = 0;
 			foreach (Character mCharacter in mCharacters)
 			{
-				if (mCharacter.isEnemy)
+				if (mCharacter.ownerId == 1 && !mCharacter.dynamicSpawn)
 				{
 					num++;
 				}
@@ -90,9 +96,37 @@ public class CharactersManager : WeakGlobalInstance<CharactersManager>
 		}
 	}
 
+	public List<Character> allUniqueAllies
+	{
+		get
+		{
+			List<Character> list = new List<Character>();
+			foreach (Character mCharacter in mCharacters)
+			{
+				if (!mCharacter.isEnemy && mCharacter.isUnique)
+				{
+					list.Add(mCharacter);
+				}
+			}
+			foreach (Character mInactiveCharacter in mInactiveCharacters)
+			{
+				if (!mInactiveCharacter.isEnemy && mInactiveCharacter.isUnique)
+				{
+					list.Add(mInactiveCharacter);
+				}
+			}
+			return list;
+		}
+	}
+
 	public CharactersManager()
 	{
 		SetUniqueInstance(this);
+		mPlayerCharacters = new List<Character>[InGameImpl.kMaxPlayers];
+		for (int i = 0; i < InGameImpl.kMaxPlayers; i++)
+		{
+			mPlayerCharacters[i] = new List<Character>();
+		}
 	}
 
 	public void Update()
@@ -132,22 +166,65 @@ public class CharactersManager : WeakGlobalInstance<CharactersManager>
 	public void AddCharacter(Character c)
 	{
 		mCharacters.Add(c);
+		if (c.ownerId >= 0)
+		{
+			mPlayerCharacters[c.ownerId].Add(c);
+		}
+	}
+
+	public void KillCharacter(Character c)
+	{
+		c.health = 0f;
 	}
 
 	public void DestroyCharacter(Character c)
 	{
 		mCharacters.Remove(c);
+		if (c.ownerId >= 0)
+		{
+			mPlayerCharacters[c.ownerId].Remove(c);
+		}
 		mDyingCharacters.Remove(c);
 		c.Destroy();
 	}
 
-	public void RegisterAttackStarted(bool isEnemy, bool isRanged)
+	public void AddMount(Character h, int ownerId)
 	{
-		if (isEnemy && isRanged)
+		mCharacters.Add(h);
+		SetMount(ownerId, h);
+	}
+
+	public void KillMount(int ownerId)
+	{
+		KillCharacter(mMount[ownerId]);
+		mMount[ownerId] = null;
+	}
+
+	public void SetMountActive(bool active, int ownerId)
+	{
+		if (mMount[ownerId] != null)
+		{
+			mMount[ownerId].isActive = active;
+		}
+	}
+
+	public Character GetMount(int ownerId)
+	{
+		return mMount[ownerId];
+	}
+
+	public void SetMount(int ownerId, Character mount)
+	{
+		mMount[ownerId] = mount;
+	}
+
+	public void RegisterAttackStarted(int ownerId, bool isRanged)
+	{
+		if (ownerId == 1 && isRanged)
 		{
 			enemyRangedPreAttackDelay = 0.25f;
 		}
-		else if (isEnemy)
+		else if (ownerId == 1)
 		{
 			enemyMeleePreAttackDelay = 0.25f;
 		}
@@ -168,7 +245,7 @@ public class CharactersManager : WeakGlobalInstance<CharactersManager>
 		{
 			return character;
 		}
-		List<Character> charactersInRange = GetCharactersInRange(range, !attacker.isEnemy);
+		List<Character> charactersInRange = GetCharactersInRange(range, 1 - attacker.ownerId);
 		if (charactersInRange.Count == 0)
 		{
 			return character;
@@ -179,14 +256,15 @@ public class CharactersManager : WeakGlobalInstance<CharactersManager>
 		float num2 = float.MaxValue;
 		bool flag2 = false;
 		int num3 = int.MaxValue;
+		bool onlyCorruptibleTargets = attacker.onlyCorruptibleTargets;
 		foreach (Character item in charactersInRange)
 		{
-			if (!(item.health > 0f))
+			if (!(item.health > 0f) || (onlyCorruptibleTargets && (item.isEnemy || item.isPlayer || string.IsNullOrEmpty(item.corruptionID) || ((item.ownerId != 0) ? (item.position.z >= WeakGlobalMonoBehavior<InGameImpl>.Instance.enemyGate.position.z - 1f) : (item.position.z <= WeakGlobalMonoBehavior<InGameImpl>.Instance.gate.position.z + 1f)))))
 			{
 				continue;
 			}
 			bool flag3 = false;
-			bool flag4 = item.isFlying || item.isInKnockback;
+			bool flag4 = item.isFlying || item.isInKnockback || item.isInJump;
 			float num4 = Mathf.Abs(item.position.z - z);
 			int num5 = 0;
 			if (flag)
@@ -209,7 +287,7 @@ public class CharactersManager : WeakGlobalInstance<CharactersManager>
 				}
 				else
 				{
-					if (num4 > num + 45f)
+					if (num4 > num + 0.45f)
 					{
 						continue;
 					}
@@ -217,7 +295,7 @@ public class CharactersManager : WeakGlobalInstance<CharactersManager>
 					{
 						flag3 = true;
 					}
-					else if (num4 < num - 45f)
+					else if (num4 < num - 0.45f)
 					{
 						flag3 = true;
 					}
@@ -246,17 +324,17 @@ public class CharactersManager : WeakGlobalInstance<CharactersManager>
 		return character;
 	}
 
-	public List<Character> GetCharactersInRange(GameRange range, bool areEnemies)
+	public List<Character> GetCharactersInRange(GameRange range, int ownerId)
 	{
-		return GetCharactersInRange(range.left, range.right, areEnemies);
+		return GetCharactersInRange(range.left, range.right, ownerId);
 	}
 
-	public List<Character> GetCharactersInRange(float zMin, float zMax, bool areEnemies)
+	public List<Character> GetCharactersInRange(float zMin, float zMax, int ownerId)
 	{
 		List<Character> list = new List<Character>();
 		foreach (Character mCharacter in mCharacters)
 		{
-			if (mCharacter.isEnemy == areEnemies && mCharacter.health > 0f && mCharacter.position.z >= zMin && mCharacter.position.z <= zMax && (!mCharacter.isPlayer || !Singleton<Profile>.instance.inBonusWave))
+			if (((mCharacter.ownerId == ownerId && !mCharacter.enemyIgnoresMe) || ownerId < 0) && mCharacter.health > 0f && mCharacter.position.z >= zMin && mCharacter.position.z <= zMax)
 			{
 				list.Add(mCharacter);
 			}
@@ -264,21 +342,57 @@ public class CharactersManager : WeakGlobalInstance<CharactersManager>
 		return list;
 	}
 
-	public bool IsCharacterInRange(GameRange range, bool areEnemies, bool gateOnly, bool includeFlyers, bool injuredOnly, bool includeDecayingCharacters)
+	public List<Character> GetAlliesInRange(GameRange range, int ownerId)
 	{
-		return IsCharacterInRange(range.left, range.right, areEnemies, gateOnly, includeFlyers, injuredOnly, includeDecayingCharacters);
+		return GetAlliesInRange(range.left, range.right, ownerId);
 	}
 
-	public bool IsCharacterInRange(float zMin, float zMax, bool areEnemies, bool gateOnly, bool includeFlyers, bool injuredOnly, bool includeDecayingCharacters)
+	public List<Character> GetAlliesInRange(float zMin, float zMax, int ownerId)
+	{
+		List<Character> list = new List<Character>();
+		foreach (Character mCharacter in mCharacters)
+		{
+			if (mCharacter.ownerId == ownerId && (!mCharacter.enemyIgnoresMe || mCharacter.isBlastoffFlyer) && mCharacter.health > 0f && mCharacter.position.z >= zMin && mCharacter.position.z <= zMax)
+			{
+				list.Add(mCharacter);
+			}
+		}
+		return list;
+	}
+
+	public bool IsCharacterInRange(GameRange range, int ownerId, bool gateOnly, bool includeFlyers, bool injuredOnly, bool includeDecayingCharacters, bool onlyCorruptible)
+	{
+		return IsCharacterInRange(range.left, range.right, ownerId, gateOnly, includeFlyers, injuredOnly, includeDecayingCharacters, onlyCorruptible);
+	}
+
+	public bool IsCharacterInRange(float zMin, float zMax, int ownerId, bool gateOnly, bool includeFlyers, bool injuredOnly, bool includeDecayingCharacters, bool onlyCorruptible)
 	{
 		foreach (Character mCharacter in mCharacters)
 		{
-			if (mCharacter.isEnemy == areEnemies && mCharacter.position.z >= zMin && mCharacter.position.z <= zMax && mCharacter.health > 0f && (includeFlyers || !mCharacter.isInKnockback) && (!gateOnly || mCharacter.isBase) && (includeFlyers || !mCharacter.isFlying) && (!injuredOnly || mCharacter.health < mCharacter.maxHealth) && (!mCharacter.isPlayer || !Singleton<Profile>.instance.inBonusWave) && (mCharacter.autoHealthRecovery >= 0f || includeDecayingCharacters))
+			float z = mCharacter.position.z;
+			if ((mCharacter.ownerId == ownerId || ownerId < 0) && z >= zMin && z <= zMax && mCharacter.health > 0f && (includeFlyers || (!mCharacter.isInKnockback && !mCharacter.isInJump)) && (!gateOnly || mCharacter.isBase) && (includeFlyers || !mCharacter.isFlying) && (!injuredOnly || mCharacter.health < mCharacter.maxHealth || mCharacter.mountedHealth < mCharacter.mountedHealthMax) && (mCharacter.autoHealthRecovery >= 0f || includeDecayingCharacters) && (!onlyCorruptible || (!string.IsNullOrEmpty(mCharacter.corruptionID) && ((mCharacter.ownerId != 0) ? (z < WeakGlobalMonoBehavior<InGameImpl>.Instance.enemyGate.transform.position.z - 1f) : (z > WeakGlobalMonoBehavior<InGameImpl>.Instance.gate.transform.position.z + 1f)))))
 			{
 				return true;
 			}
 		}
 		return false;
+	}
+
+	public List<Character> GetCharactersInRangeMaxCount(float zMin, float zMax, int ownerId, float maxNum)
+	{
+		List<Character> list = new List<Character>();
+		foreach (Character mCharacter in mCharacters)
+		{
+			if ((mCharacter.ownerId == ownerId || ownerId < 0) && mCharacter.health > 0f && mCharacter.position.z >= zMin && mCharacter.position.z <= zMax)
+			{
+				list.Add(mCharacter);
+				if ((maxNum -= 1f) < 0f)
+				{
+					break;
+				}
+			}
+		}
+		return list;
 	}
 
 	public void idleAll()
@@ -293,7 +407,7 @@ public class CharactersManager : WeakGlobalInstance<CharactersManager>
 	{
 		if (preference == ELanePreference.center)
 		{
-			return WeakGlobalSceneBehavior<InGameImpl>.instance.heroSpawnPoint.position.x;
+			return WeakGlobalMonoBehavior<InGameImpl>.Instance.heroSpawnPoint.position.x;
 		}
 		if (sizeOfSpawnArea <= 0f)
 		{
@@ -307,13 +421,13 @@ public class CharactersManager : WeakGlobalInstance<CharactersManager>
 		{
 			num3 = 750f;
 		}
-		int num4 = (int)Mathf.Ceil(sizeOfSpawnArea / 15f);
+		int num4 = (int)Mathf.Ceil(sizeOfSpawnArea / 0.15f);
 		float[] array = new float[num4];
 		for (int i = 0; i < num4; i++)
 		{
 			array[i] = 0f;
 		}
-		int num5 = positionToLane(WeakGlobalSceneBehavior<InGameImpl>.instance.heroSpawnPoint.position.x, num2, num4);
+		int num5 = positionToLane(WeakGlobalMonoBehavior<InGameImpl>.Instance.heroSpawnPoint.position.x, num2, num4);
 		if (!isEnemy)
 		{
 			array[num5] = 25000f;
@@ -413,70 +527,110 @@ public class CharactersManager : WeakGlobalInstance<CharactersManager>
 				num9 = num11;
 			}
 		}
-		float num12 = num2 + 15f * (float)num8 - 7.3500004f;
-		float max2 = num12 + 13.5f;
+		float num12 = num2 + 0.15f * (float)num8 - 0.07350001f;
+		float max2 = num12 + 0.135f;
 		return Mathf.Clamp(UnityEngine.Random.Range(num12, max2), num2, max);
 	}
 
 	private void UpdateBattle()
 	{
-		for (int num = mCharacters.Count - 1; num >= 0; num--)
+		bool flag = WeakGlobalMonoBehavior<InGameImpl>.Instance.HasLuckCharm();
+		for (int num = mInactiveCharacters.Count - 1; num >= 0; num--)
 		{
-			Character character = mCharacters[num];
-			if (character.health <= 0f && !character.isBase)
+			Character character = mInactiveCharacters[num];
+			if (character.isActive)
 			{
-				if (character.isEnemy)
-				{
-					WeakGlobalInstance<WaveManager>.instance.registerEnemyKilled(character.uniqueID);
-					if (character.lastAttackTypeHitWith == EAttackType.Trample)
-					{
-						Singleton<Profile>.instance.UndeadKilledViaTroopTrample++;
-					}
-					else if (character.lastAttackTypeHitWith == EAttackType.Slice)
-					{
-						Singleton<Profile>.instance.UndeadKilledViaKatanaSlash++;
-					}
-					if (Singleton<PlayStatistics>.instance != null)
-					{
-						Singleton<PlayStatistics>.instance.stats.lastWaveCoinsAward += character.resourceDrops.guaranteedCoinsAward;
-					}
-					Singleton<Profile>.instance.coins += character.resourceDrops.guaranteedCoinsAward;
-					Vector3 jointPosition = character.controller.autoPaperdoll.GetJointPosition("impact_target");
-					bool flag = WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm == "luck" || WeakGlobalSceneBehavior<InGameImpl>.instance.activeCharm.Contains("+luck");
-					if (flag || (WeakGlobalInstance<WaveManager>.instance.isDone && enemiesCount <= 1))
-					{
-						character.resourceDrops.amountDropped.min = Mathf.Max(character.resourceDrops.amountDropped.min, 1);
-						character.resourceDrops.amountDropped.max = Mathf.Max(character.resourceDrops.amountDropped.min, character.resourceDrops.amountDropped.max);
-						WeakGlobalInstance<CollectableManager>.instance.SpawnResources(character.resourceDrops, jointPosition);
-						if (flag)
-						{
-							UnityEngine.Object.Instantiate(Resources.Load("FX/Confetti"), jointPosition, Quaternion.identity);
-						}
-					}
-					WeakGlobalInstance<CollectableManager>.instance.SpawnResources(character.resourceDrops, jointPosition);
-				}
-				mDyingCharacters.Add(character);
-				mCharacters.RemoveAt(num);
+				mInactiveCharacters.Remove(character);
+				mCharacters.Add(character);
 			}
 		}
-		for (int num2 = mDyingCharacters.Count - 1; num2 >= 0; num2--)
+		for (int num2 = mCharacters.Count - 1; num2 >= 0; num2--)
 		{
-			Character character2 = mDyingCharacters[num2];
-			if (character2.isOver && !character2.isPlayer && !character2.isBase)
+			Character character2 = mCharacters[num2];
+			if (!character2.isActive)
 			{
-				character2.Destroy();
-				mDyingCharacters.RemoveAt(num2);
+				mInactiveCharacters.Add(character2);
+				mCharacters.Remove(character2);
 			}
-			else if (character2.health > 0f)
+			else if (character2.health <= 0f && !character2.isBase)
 			{
-				mCharacters.Add(character2);
-				mDyingCharacters.RemoveAt(num2);
+				if (character2.ownerId != 0)
+				{
+					Singleton<Profile>.Instance.coins += character2.resourceDrops.guaranteedCoinsAward;
+					Vector3 jointPosition = character2.controller.autoPaperdoll.GetJointPosition("impact_target");
+					if (flag || (WeakGlobalInstance<WaveManager>.Instance != null && WeakGlobalInstance<WaveManager>.Instance.isDone && enemiesCount <= 1))
+					{
+						character2.resourceDrops.amountDropped.min = Mathf.Max(character2.resourceDrops.amountDropped.min, 1);
+						character2.resourceDrops.amountDropped.max = Mathf.Max(character2.resourceDrops.amountDropped.min, character2.resourceDrops.amountDropped.max);
+						WeakGlobalInstance<CollectableManager>.Instance.SpawnResources(character2.resourceDrops, jointPosition);
+						if (flag)
+						{
+							SharedResourceLoader.SharedResource cachedResource = ResourceCache.GetCachedResource("Assets/Game/Resources/FX/Confetti.prefab", 1);
+							if (cachedResource != null)
+							{
+								GameObjectPool.DefaultObjectPool.Acquire(cachedResource.Resource as GameObject, jointPosition, Quaternion.identity);
+							}
+						}
+					}
+					WeakGlobalInstance<CollectableManager>.Instance.SpawnResources(character2.resourceDrops, jointPosition);
+				}
+				if (character2.ownerId != 0 && !character2.dynamicSpawn)
+				{
+					if (character2.isEnemy && WeakGlobalInstance<WaveManager>.Instance != null)
+					{
+						WeakGlobalInstance<WaveManager>.Instance.registerEnemyKilled(character2.uniqueID);
+					}
+					else if (WeakGlobalMonoBehavior<InGameImpl>.Instance.GetLeadership(1) != null)
+					{
+						WeakGlobalMonoBehavior<InGameImpl>.Instance.GetLeadership(1).UnitKilled();
+					}
+				}
+				mDyingCharacters.Add(character2);
+				mCharacters.RemoveAt(num2);
+				if (character2.ownerId >= 0)
+				{
+					mPlayerCharacters[character2.ownerId].Remove(character2);
+				}
+			}
+		}
+		for (int num3 = mDyingCharacters.Count - 1; num3 >= 0; num3--)
+		{
+			Character character3 = mDyingCharacters[num3];
+			if (character3.controller == null)
+			{
+				mDyingCharacters.RemoveAt(num3);
+			}
+			else if (character3.isOver && !character3.isPlayer && !character3.isBase)
+			{
+				character3.Destroy();
+				mDyingCharacters.RemoveAt(num3);
+			}
+			else if (character3.health > 0f)
+			{
+				mCharacters.Add(character3);
+				mDyingCharacters.RemoveAt(num3);
 			}
 		}
 	}
 
+	public void KillAllEnemies()
+	{
+		foreach (Character mCharacter in mCharacters)
+		{
+			if (mCharacter.isEnemy)
+			{
+				mCharacter.health = 0f;
+			}
+		}
+	}
+
+	public List<Character> GetPlayerCharacters(int playerId)
+	{
+		return mPlayerCharacters[playerId];
+	}
+
 	private int positionToLane(float xPos, float minX, int laneCount)
 	{
-		return Mathf.Clamp(Mathf.RoundToInt((xPos - minX) / 15f), 0, laneCount - 1);
+		return Mathf.Clamp(Mathf.RoundToInt((xPos - minX) / 0.15f), 0, laneCount - 1);
 	}
 }

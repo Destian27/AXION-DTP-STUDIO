@@ -1,14 +1,12 @@
 using UnityEngine;
 
-public class CameraShaker : MonoBehaviour
+public class CameraShaker : SingletonSpawningMonoBehaviour<CameraShaker>
 {
 	private const float kCameraShakeReductionRate = 5f;
 
-	private const float kMinCameraShakeRolloff = 500f;
+	private const float kMinCameraShakeRolloff = 5f;
 
-	private const float kMaxCameraShakeRolloff = 1000f;
-
-	private static CameraShaker mInstance;
+	private const float kMaxCameraShakeRolloff = 10f;
 
 	private static float mLastValidDeltaTime;
 
@@ -24,15 +22,13 @@ public class CameraShaker : MonoBehaviour
 		{
 			return;
 		}
-		if (mInstance == null || mInstance.mCameraTransform != Camera.main.transform)
+		if (WeakGlobalMonoBehavior<InGameImpl>.Exists && (!SingletonSpawningMonoBehaviour<CameraShaker>.Exists || SingletonSpawningMonoBehaviour<CameraShaker>.Instance.mCameraTransform != WeakGlobalMonoBehavior<InGameImpl>.Instance.gameCamera.transform))
 		{
-			GameObject gameObject = new GameObject("CameraShaker");
-			mInstance = gameObject.AddComponent<CameraShaker>();
-			mInstance.mCameraTransform = Camera.main.transform;
+			SingletonSpawningMonoBehaviour<CameraShaker>.Instance.mCameraTransform = WeakGlobalMonoBehavior<InGameImpl>.Instance.gameCamera.transform;
 		}
-		if (!(mInstance.mIntensity > 0f))
+		if (!(SingletonSpawningMonoBehaviour<CameraShaker>.Instance.mIntensity > 0f) && !(SingletonSpawningMonoBehaviour<CameraShaker>.Instance.mCameraTransform == null))
 		{
-			mInstance.StartShake(shakeOrigin, shakeIntensity);
+			SingletonSpawningMonoBehaviour<CameraShaker>.Instance.StartShake(shakeOrigin, shakeIntensity);
 			if (mLastValidDeltaTime == 0f)
 			{
 				mLastValidDeltaTime = Time.maximumDeltaTime;
@@ -45,24 +41,24 @@ public class CameraShaker : MonoBehaviour
 		float z = shakeOrigin.z;
 		float z2 = mCameraTransform.position.z;
 		float num = Mathf.Abs(z - z2);
-		if (num <= 500f)
+		if (num <= 5f)
 		{
 			mIntensity = Mathf.Max(shakeIntensity, mIntensity);
 		}
-		else if (num < 1000f)
+		else if (num < 10f)
 		{
-			mIntensity = Mathf.Max(mIntensity, shakeIntensity * (1000f - num) / 500f);
+			mIntensity = Mathf.Max(mIntensity, shakeIntensity * (10f - num) / 5f);
 		}
 	}
 
 	private void LateUpdate()
 	{
-		if (mIntensity <= 0f)
+		if (mIntensity <= 0f || mCameraTransform == null)
 		{
 			return;
 		}
 		Vector3 eulerAngles = mCameraTransform.eulerAngles;
-		if (eulerAngles.z == 0f)
+		if (Mathf.Abs(eulerAngles.z) < 0.001f)
 		{
 			mFlipBit = !mFlipBit;
 			if (mFlipBit)
@@ -92,8 +88,6 @@ public class CameraShaker : MonoBehaviour
 		if (mIntensity <= 0f)
 		{
 			eulerAngles.z = 0f;
-			Object.Destroy(base.gameObject, 0.1f);
-			mInstance = null;
 		}
 		mCameraTransform.eulerAngles = eulerAngles;
 	}

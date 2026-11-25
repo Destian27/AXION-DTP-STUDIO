@@ -18,7 +18,7 @@ public class BuffIconClient
 
 	private List<Entry> mEntries = new List<Entry>();
 
-	private CharacterModelController mTarget;
+	private TypedWeakReference<CharacterModelController> mTarget;
 
 	private string mActiveIcon = string.Empty;
 
@@ -28,7 +28,7 @@ public class BuffIconClient
 
 	public BuffIconClient(CharacterModelController mc)
 	{
-		mTarget = mc;
+		mTarget = new TypedWeakReference<CharacterModelController>(mc);
 	}
 
 	public void Update()
@@ -118,13 +118,16 @@ public class BuffIconClient
 	{
 		KillActiveIcon();
 		mActiveIcon = e.iconFile;
-		if (e.asEffect)
+		if (!object.ReferenceEquals(mTarget.ptr, null))
 		{
-			mActiveGO = mTarget.SpawnEffectAtJoint(WeakGlobalInstance<BuffIconManager>.instance.GetPrefab(mActiveIcon), "buff_icon", true);
-		}
-		else
-		{
-			mActiveGO = mTarget.InstantiateObjectOnJoint(WeakGlobalInstance<BuffIconManager>.instance.GetPrefab(mActiveIcon), "buff_icon");
+			if (e.asEffect)
+			{
+				mActiveGO = mTarget.ptr.SpawnEffectAtJoint(WeakGlobalInstance<BuffIconManager>.Instance.GetPrefab(mActiveIcon), "buff_icon", true);
+			}
+			else
+			{
+				mActiveGO = mTarget.ptr.InstantiateObjectOnJoint(WeakGlobalInstance<BuffIconManager>.Instance.GetPrefab(mActiveIcon), "buff_icon");
+			}
 		}
 	}
 

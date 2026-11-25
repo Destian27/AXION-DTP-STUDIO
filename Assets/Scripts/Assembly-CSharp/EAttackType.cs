@@ -16,5 +16,10 @@ public enum EAttackType
 	Sonic = 13,
 	Stealth = 14,
 	Trample = 15,
-	Stomp = 16
+	Stomp = 16,
+	Wind = 17,
+	Flash = 18,
+	SoulBurn = 19,
+	Flame = 20,
+	Force = 21
 }

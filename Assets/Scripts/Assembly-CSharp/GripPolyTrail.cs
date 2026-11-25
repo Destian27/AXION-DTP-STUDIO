@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-[RequireComponent(typeof(MeshFilter))]
 [RequireComponent(typeof(MeshRenderer))]
+[RequireComponent(typeof(MeshFilter))]
 public class GripPolyTrail : MonoBehaviour
 {
 	private struct PolyTrailSection
@@ -24,15 +24,24 @@ public class GripPolyTrail : MonoBehaviour
 
 	public float TrailTime = 2f;
 
+	public int MaxSections = 100;
+
 	public float DistanceBetweenVerts = 0.1f;
 
 	public bool ShouldAddSections;
 
+	private Mesh mesh;
+
 	private List<PolyTrailSection> mSections = new List<PolyTrailSection>();
+
+	private void Start()
+	{
+		mesh = GetComponent<MeshFilter>().mesh;
+	}
 
 	private void LateUpdate()
 	{
-		while (mSections.Count > 0 && Time.time > mSections[mSections.Count - 1].time + TrailTime)
+		while (mSections.Count > 0 && (Time.time > mSections[mSections.Count - 1].time + TrailTime || mSections.Count >= MaxSections))
 		{
 			mSections.RemoveAt(mSections.Count - 1);
 		}
@@ -45,7 +54,6 @@ public class GripPolyTrail : MonoBehaviour
 			item.time = Time.time;
 			mSections.Insert(0, item);
 		}
-		Mesh mesh = GetComponent<MeshFilter>().mesh;
 		mesh.Clear();
 		if (mSections.Count < 2)
 		{
@@ -72,6 +80,10 @@ public class GripPolyTrail : MonoBehaviour
 			array2[i * 2] = color;
 			array2[i * 2 + 1] = color;
 		}
+		array3[(mSections.Count - 1) * 2] = new Vector2(1f, 0f);
+		array3[(mSections.Count - 1) * 2 + 1] = new Vector2(1f, 1f);
+		array2[(mSections.Count - 1) * 2] = endColor;
+		array2[(mSections.Count - 1) * 2 + 1] = endColor;
 		int[] array4 = new int[(mSections.Count - 1) * 2 * 3];
 		for (int j = 0; j < array4.Length / 6; j++)
 		{
@@ -86,5 +98,19 @@ public class GripPolyTrail : MonoBehaviour
 		mesh.colors = array2;
 		mesh.uv = array3;
 		mesh.triangles = array4;
+	}
+
+	public bool HasSections()
+	{
+		if (mSections.Count > 0)
+		{
+			return true;
+		}
+		return false;
+	}
+
+	public void Clear()
+	{
+		mSections.Clear();
 	}
 }

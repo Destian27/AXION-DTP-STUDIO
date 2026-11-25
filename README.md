@@ -1,15 +1,18 @@
-# Samurai vs Zombie DTP
+# Samurai vs Zombie DTP 2
 
-Proyek Unity **2017.4.40f1** (hasil ekspor Samurai vs Zombies).
+Package: `com.dtp.samuraivszombie` · Min SDK 24 · Target SDK 35 · Unity 6000.0.47f1
 
-- Nama aplikasi: `Samurai vs Zombie DTP`
-- Package Android: `com.dtp.samuraivszombie2` (beda dari proyek lain, jadi bisa terpasang berdampingan)
-- Backend: IL2CPP, tanda tangan tetap `Keystore/dtp.keystore`
-  (alias `dtpkey`, password `dtp123456`). Pengaturan ini terisi otomatis saat Unity dibuka
-  lewat `Assets/Editor/AndroidSigning.cs`; bisa juga lewat menu **DTP > Terapkan Keystore Android**.
+Build APK: GitHub Actions → "Build Android DTP 2" → Run workflow (butuh secret UNITY_LICENSE, UNITY_EMAIL, UNITY_PASSWORD).
 
-## Build
-1. Buka folder ini dengan Unity Hub memakai versi 2017.4.40f1 + modul Android Build Support (SDK, NDK, OpenJDK).
-2. File > Build Settings > Android > Build.
+## Controls (Configurable)
 
-CI: `.github/workflows/build-android.yml` (isi secrets UNITY_LICENSE, UNITY_EMAIL, UNITY_PASSWORD).
+## Controls (Configurable)
+|Control|Bind(s)|Default Key(s)|
+|-------|----|--------------|
+|Move Left|Move Left|`A`, `Left Arrow`|
+|Move Right|Move Right|`D`, `Right Arrow`|
+|Spawn Ally|Spawn Ally `X`|`1`, `2`, `3`, `4`, `5`|
+|Pause / Back|Pause|`Escape`, `Return/Enter`|
+|Attack|Attack|Space/Mouse 0|
+|Upgrade Leadership|Upgrade Leadership|`Q`, `Left Shift`|
+|Use Ability|Ability `X`|`E`, `R`, `T`, `Y`|

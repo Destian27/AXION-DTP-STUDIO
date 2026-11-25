@@ -2,17 +2,63 @@ using System.Collections.Generic;
 
 public class CharmsDatabase : Singleton<CharmsDatabase>
 {
-	private SDFTreeNode mData;
+	private List<DataBundleRecordHandle<CharmSchema>> mData;
 
-	private Dictionary<string, string[]> mAllIDs = new Dictionary<string, string[]>();
+	private Dictionary<string, List<string>> mAllIDs = new Dictionary<string, List<string>>();
 
-	public List<string> allIDs;
-
-	public string[] allIDsForActivePlayMode
+	public static string UdamanTableName
 	{
 		get
 		{
-			return GetIDsForPlayMode(Singleton<PlayModesManager>.instance.selectedMode);
+			return "Charms";
+		}
+	}
+
+	public List<string> allIDsForActivePlayMode
+	{
+		get
+		{
+			return GetIDsForPlayMode(GetCharmsPlayMode());
+		}
+	}
+
+	public CharmSchema this[string charmID]
+	{
+		get
+		{
+			DataBundleRecordHandle<CharmSchema> dataBundleRecordHandle = mData.Find((DataBundleRecordHandle<CharmSchema> c) => c.Data.id.Equals(charmID));
+			return (dataBundleRecordHandle == null) ? null : dataBundleRecordHandle.Data;
+		}
+	}
+
+	public List<CharmSchema> AllPlayerAvailableCharms
+	{
+		get
+		{
+			List<CharmSchema> list = new List<CharmSchema>();
+			List<string> list2 = allIDsForActivePlayMode;
+			foreach (string item in list2)
+			{
+				list.Add(this[item]);
+			}
+			return list;
+		}
+	}
+
+	public IEnumerable<CharmSchema> AllCharmsForActivePlayMode
+	{
+		get
+		{
+			List<CharmSchema> list = new List<CharmSchema>();
+			List<string> list2 = allIDsForActivePlayMode;
+			foreach (DataBundleRecordHandle<CharmSchema> mDatum in mData)
+			{
+				if (list2.Contains(mDatum.Data.id))
+				{
+					list.Add(mDatum.Data);
+				}
+			}
+			return list;
 		}
 	}
 
@@ -20,28 +66,45 @@ public class CharmsDatabase : Singleton<CharmsDatabase>
 	{
 		ResetCachedData();
 		CacheSimpleIDList();
-		SingletonMonoBehaviour<ResourcesManager>.instance.onInvalidateCache += ResetCachedData;
 	}
 
 	public void ResetCachedData()
 	{
-		mData = SingletonMonoBehaviour<ResourcesManager>.instance.Open("Registry/Charms");
+		mData = new List<DataBundleRecordHandle<CharmSchema>>();
+		if (DataBundleRuntime.Instance == null || !DataBundleRuntime.Instance.Initialized)
+		{
+			return;
+		}
+		foreach (string item in DataBundleRuntime.Instance.EnumerateRecordKeys(typeof(CharmSchema), UdamanTableName))
+		{
+			DataBundleRecordHandle<CharmSchema> dataBundleRecordHandle = new DataBundleRecordHandle<CharmSchema>(UdamanTableName, item);
+			dataBundleRecordHandle.Data.Initialize(UdamanTableName);
+			mData.Add(dataBundleRecordHandle);
+		}
 		CacheSimpleIDList();
 	}
 
-	public string[] GetIDsForPlayMode(string playmode)
+	private string GetCharmsPlayMode()
+	{
+		if (string.IsNullOrEmpty(Singleton<Profile>.Instance.playModeSubSection))
+		{
+			return "classic";
+		}
+		return Singleton<Profile>.Instance.playModeSubSection;
+	}
+
+	public List<string> GetIDsForPlayMode(string playmode)
 	{
 		return mAllIDs[playmode];
 	}
 
 	public bool Contains(string id)
 	{
-		foreach (KeyValuePair<string, string[]> mAllID in mAllIDs)
+		foreach (KeyValuePair<string, List<string>> mAllID in mAllIDs)
 		{
-			string[] value = mAllID.Value;
-			foreach (string strA in value)
+			foreach (string item in mAllID.Value)
 			{
-				if (string.Compare(strA, id, true) == 0)
+				if (string.Compare(item, id, true) == 0)
 				{
 					return true;
 				}
@@ -50,74 +113,49 @@ public class CharmsDatabase : Singleton<CharmsDatabase>
 		return false;
 	}
 
-	public string GetAttribute(string charmID, string attributeName)
+	public void LoadFrontEndData()
 	{
-		SDFTreeNode sDFTreeNode = mData.to(charmID);
-		if (sDFTreeNode == null)
+		foreach (DataBundleRecordHandle<CharmSchema> mDatum in mData)
 		{
-			return string.Empty;
+			mDatum.Load(DataBundleResourceGroup.FrontEnd, false, null);
 		}
-		if (!sDFTreeNode.hasAttribute(attributeName))
-		{
-			return string.Empty;
-		}
-		return Singleton<Localizer>.instance.Parse(sDFTreeNode[attributeName]);
 	}
 
-	public string GetAttribute(string charmID, string subSection, string attributeName)
+	public void LoadInGameData(string id, bool unloadUnused)
 	{
-		SDFTreeNode sDFTreeNode = mData.to(charmID);
-		if (sDFTreeNode == null)
+		foreach (DataBundleRecordHandle<CharmSchema> mDatum in mData)
 		{
-			return string.Empty;
+			if (string.Equals(id, mDatum.Data.id))
+			{
+				mDatum.Load(DataBundleResourceGroup.InGame, true, null);
+			}
+			else if (unloadUnused)
+			{
+				mDatum.Unload();
+			}
 		}
-		sDFTreeNode = sDFTreeNode.to(subSection);
-		if (sDFTreeNode == null)
+	}
+
+	public void UnloadData()
+	{
+		foreach (DataBundleRecordHandle<CharmSchema> mDatum in mData)
 		{
-			return string.Empty;
+			mDatum.Unload();
 		}
-		if (!sDFTreeNode.hasAttribute(attributeName))
-		{
-			return string.Empty;
-		}
-		return Singleton<Localizer>.instance.Parse(sDFTreeNode[attributeName]);
 	}
 
 	private void CacheSimpleIDList()
 	{
-		SDFTreeNode sDFTreeNode = mData.to("All");
-		List<string> list = new List<string>();
-		for (int i = 0; sDFTreeNode.hasAttribute(i); i++)
-		{
-			list.Add(sDFTreeNode[i]);
-		}
-		allIDs = list;
 		mAllIDs.Clear();
-		foreach (string item in list)
+		foreach (DataBundleRecordHandle<CharmSchema> mDatum in mData)
 		{
-			string text = mData.to(item)["playmode"];
-			if (mAllIDs.ContainsKey(text))
+			List<string> value = null;
+			if (!mAllIDs.TryGetValue(mDatum.Data.playmode.Key, out value))
 			{
-				continue;
+				value = new List<string>();
+				mAllIDs.Add(mDatum.Data.playmode.Key, value);
 			}
-			int num = 0;
-			foreach (string item2 in list)
-			{
-				if (text == mData.to(item2)["playmode"])
-				{
-					num++;
-				}
-			}
-			int num2 = 0;
-			string[] array = new string[num];
-			foreach (string item3 in list)
-			{
-				if (text == mData.to(item3)["playmode"])
-				{
-					array[num2++] = item3;
-				}
-			}
-			mAllIDs.Add(text, array);
+			value.Add(mDatum.Data.id);
 		}
 	}
 }
