@@ -1,5 +1,0 @@
-<linker>
-  <!-- IL2CPP: jangan buang kode game (DataBundles & Glu memakai refleksi). -->
-  <assembly fullname="Assembly-CSharp" preserve="all"/>
-  <assembly fullname="Assembly-CSharp-firstpass" preserve="all"/>
-</linker>

@@ -6,10 +6,8 @@ namespace Glu.Diagnostics.Internal
 	{
 		private const string __importName = "GluDiagnostics";
 
-		[DllImport("GluDiagnostics")]
-		public static extern void Glu_Diagnostics_Abort();
+		public static void Glu_Diagnostics_Abort() { }
 
-		[DllImport("GluDiagnostics")]
-		public static extern void Glu_Console_WriteLine(string line);
+		public static void Glu_Console_WriteLine(string line) { }
 	}
 }

@@ -122,36 +122,80 @@ public class CInAppPurchaseCocoa : ICInAppPurchase
 		}
 	}
 
+#if UNITY_IOS && !UNITY_EDITOR
 	[DllImport("__Internal", CharSet = CharSet.Ansi)]
 	private static extern void IAPNativeInit(string[] products, string[] ids);
+#else
+	private static void IAPNativeInit(string[] products, string[] ids) { }
+#endif
 
+#if UNITY_IOS && !UNITY_EDITOR
 	[DllImport("__Internal", CharSet = CharSet.Ansi)]
 	private static extern IntPtr IAPNativeRequestProductData();
+#else
+	private static IntPtr IAPNativeRequestProductData() { return default(IntPtr); }
+#endif
 
+#if UNITY_IOS && !UNITY_EDITOR
 	[DllImport("__Internal", CharSet = CharSet.Ansi)]
 	private static extern void IAPNativeBuyProduct(string product);
+#else
+	private static void IAPNativeBuyProduct(string product) { }
+#endif
 
+#if UNITY_IOS && !UNITY_EDITOR
 	[DllImport("__Internal")]
 	private static extern int IAPNativeGetTransactionStatus();
+#else
+	private static int IAPNativeGetTransactionStatus() { return default(int); }
+#endif
 
+#if UNITY_IOS && !UNITY_EDITOR
 	[DllImport("__Internal")]
 	private static extern int IAPNativeRestoreCompletedTransactions();
+#else
+	private static int IAPNativeRestoreCompletedTransactions() { return default(int); }
+#endif
 
+#if UNITY_IOS && !UNITY_EDITOR
 	[DllImport("__Internal")]
 	private static extern int IAPNativeGetRestoreStatus();
+#else
+	private static int IAPNativeGetRestoreStatus() { return default(int); }
+#endif
 
+#if UNITY_IOS && !UNITY_EDITOR
 	[DllImport("__Internal", CharSet = CharSet.Ansi)]
 	private static extern IntPtr IAPNativeRetrieveProduct();
+#else
+	private static IntPtr IAPNativeRetrieveProduct() { return default(IntPtr); }
+#endif
 
+#if UNITY_IOS && !UNITY_EDITOR
 	[DllImport("__Internal")]
 	private static extern bool IAPNativeIsTurnedOn();
+#else
+	private static bool IAPNativeIsTurnedOn() { return default(bool); }
+#endif
 
+#if UNITY_IOS && !UNITY_EDITOR
 	[DllImport("__Internal")]
 	private static extern int IAPNativeGetRetrievalQueueCount();
+#else
+	private static int IAPNativeGetRetrievalQueueCount() { return default(int); }
+#endif
 
+#if UNITY_IOS && !UNITY_EDITOR
 	[DllImport("__Internal", CharSet = CharSet.Ansi)]
 	private static extern IntPtr IAPNativeGetRetrievalQueueItem(int index);
+#else
+	private static IntPtr IAPNativeGetRetrievalQueueItem(int index) { return default(IntPtr); }
+#endif
 
+#if UNITY_IOS && !UNITY_EDITOR
 	[DllImport("__Internal")]
 	private static extern void IAPNativeRetrievalQueueDispose(int numItems);
+#else
+	private static void IAPNativeRetrievalQueueDispose(int numItems) { }
+#endif
 }

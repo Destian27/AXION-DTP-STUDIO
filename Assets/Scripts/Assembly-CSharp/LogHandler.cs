@@ -11,7 +11,7 @@ public static class LogHandler
 	{
 		if (!registered)
 		{
-			Application.logMessageReceived += HandleLog;
+			Application.RegisterLogCallback(HandleLog);
 			registered = true;
 		}
 		logHandlers = (Application.LogCallback)Delegate.Combine(logHandlers, callback);

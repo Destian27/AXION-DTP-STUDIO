@@ -25,7 +25,6 @@ GameObject:
   serializedVersion: 5
   m_Component:
   - component: {fileID: 5}
-  - component: {fileID: 14}
   m_Layer: 0
   m_Name: BundleConfigRoot
   m_TagString: Untagged
@@ -3689,17 +3688,6 @@ ParticleSystemRenderer:
   m_Mesh2: {fileID: 0}
   m_Mesh3: {fileID: 0}
   m_MaskInteraction: 0
---- !u!114 &14
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_PrefabParentObject: {fileID: 0}
-  m_PrefabInternal: {fileID: 0}
-  m_GameObject: {fileID: 2}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: adafef68dc5879e0d4202e11bb2898b8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!114 &15
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -23,7 +23,7 @@ public static class CIBuild
         }
         catch (Exception e)
         {
-            Debug.LogException(e);
+            UnityEngine.Debug.LogException(e);
             EditorApplication.Exit(1);
         }
     }
@@ -40,9 +40,9 @@ public static class CIBuild
         if (enabled.Length == 0 || missing.Length > 0)
         {
             foreach (var m in missing)
-                Debug.LogError($"[CIBuild] Scene ada di Build Settings tapi filenya tidak ada di repo: {m}");
+                UnityEngine.Debug.LogError($"[CIBuild] Scene ada di Build Settings tapi filenya tidak ada di repo: {m}");
             if (enabled.Length == 0)
-                Debug.LogError("[CIBuild] Tidak ada scene yang aktif di Build Settings.");
+                UnityEngine.Debug.LogError("[CIBuild] Tidak ada scene yang aktif di Build Settings.");
             EditorApplication.Exit(1);
             return;
         }
@@ -75,7 +75,7 @@ public static class CIBuild
 
         BuildReport report = BuildPipeline.BuildPlayer(options);
         BuildSummary summary = report.summary;
-        Debug.Log($"[CIBuild] Hasil: {summary.result}, ukuran {summary.totalSize / (1024 * 1024)} MB, error {summary.totalErrors}");
+        UnityEngine.Debug.Log($"[CIBuild] Hasil: {summary.result}, ukuran {summary.totalSize / (1024 * 1024)} MB, error {summary.totalErrors}");
         EditorApplication.Exit(summary.result == BuildResult.Succeeded ? 0 : 1);
     }
 
@@ -85,7 +85,6 @@ public static class CIBuild
         PlayerSettings.Android.targetSdkVersion = (AndroidSdkVersions)35;
         PlayerSettings.SetScriptingBackend(UnityEditor.Build.NamedBuildTarget.Android, ScriptingImplementation.IL2CPP);
         PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARMv7 | AndroidArchitecture.ARM64;
-        PlayerSettings.Android.forceInternetPermission = true; // wajib untuk MaintenanceGate / Supabase
         PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.Android, false);
         PlayerSettings.SetGraphicsAPIs(BuildTarget.Android, new[] { UnityEngine.Rendering.GraphicsDeviceType.OpenGLES3 });
         PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Android, "com.dtp.samuraivszombie");
@@ -109,7 +108,7 @@ public static class CIBuild
         PlayerSettings.Android.keyaliasName = alias;
         PlayerSettings.Android.keyaliasPass = aliasPass;
 
-        Debug.Log("[CIBuild] Android: minSdk=24, targetSdk=35, IL2CPP, ARMv7+ARM64, GLES3, keystore=" + ksPath);
+        UnityEngine.Debug.Log("[CIBuild] Android: minSdk=24, targetSdk=35, IL2CPP, ARMv7+ARM64, GLES3, keystore=" + ksPath);
     }
 
     private static string GetArg(string name)

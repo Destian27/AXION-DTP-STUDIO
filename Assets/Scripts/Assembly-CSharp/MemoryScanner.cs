@@ -11,11 +11,23 @@ public static class MemoryScanner
 		MEMORY_SCANNER_FLAG_DEBUG_DUMP = 2
 	}
 
+#if ENABLE_MONO && UNITY_ANDROID && !UNITY_EDITOR
 	[DllImport("mono")]
 	public static extern long mono_gc_get_used_size();
 
 	[DllImport("mono")]
 	public static extern long mono_gc_get_heap_size();
+#else
+	public static long mono_gc_get_used_size()
+	{
+		return System.GC.GetTotalMemory(false);
+	}
+
+	public static long mono_gc_get_heap_size()
+	{
+		return System.GC.GetTotalMemory(false) + 1;
+	}
+#endif
 
 	private static string PrependCount(string text, int count)
 	{

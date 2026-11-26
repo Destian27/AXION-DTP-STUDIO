@@ -14,10 +14,8 @@ namespace Glu.Flurry
 		{
 		}
 
-		[DllImport("flurryplugin")]
-		private static extern void Glu_Flurry_SetAppCircleEnabled(bool enabled);
+		private static void Glu_Flurry_SetAppCircleEnabled(bool enabled) { }
 
-		[DllImport("flurryplugin")]
-		private static extern void Glu_Flurry_SetReengagementEnabled(bool enabled);
+		private static void Glu_Flurry_SetReengagementEnabled(bool enabled) { }
 	}
 }

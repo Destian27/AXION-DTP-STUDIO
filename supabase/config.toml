@@ -1,5 +1,0 @@
-project_id = "zffctknzknqaxdofptnd"
-
-[functions.maintenance-admin]
-# Dicek manual di dalam function (anon key = publik untuk 'status', JWT user untuk aksi admin).
-verify_jwt = false

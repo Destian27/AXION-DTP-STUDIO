@@ -5,6 +5,7 @@ using UnityEditor;
 using System;
 using System.Linq;
 using System.IO;
+using UnityEngine.Experimental.UIElements.StyleEnums;
 
 namespace ULegacyRipper
 {
