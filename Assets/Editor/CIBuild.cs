@@ -23,6 +23,9 @@ public static class CIBuild
         }
         catch (Exception e)
         {
+            // FIX (error CS0117 di log UBA #9): di proyek ini ada kelas global `Debug` (Assets/Scripts/Assembly-CSharp/Debug.cs)
+            // yang hanya punya Log/LogError/LogWarning/Draw*. Tanpa awalan `UnityEngine.`, `Debug.LogException` jatuh ke kelas
+            // global itu dan gagal compile (Debug does not contain 'LogException'). JANGAN hapus awalan UnityEngine. di file Editor.
             UnityEngine.Debug.LogException(e);
             EditorApplication.Exit(1);
         }
